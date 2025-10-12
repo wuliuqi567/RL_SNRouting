@@ -149,6 +149,20 @@ class Satellite:
                 '%.2f' % math.degrees(self.latitude),
                 '%.2f' % math.degrees(self.longitude))
 
+    def __eq__(self, other):
+        """
+        自定义相等性判断：两个卫星如果ID相同则认为是同一个卫星
+        """
+        if not isinstance(other, Satellite):
+            return False
+        return self.ID == other.ID
+
+    def __hash__(self):
+        """
+        自定义哈希值：基于ID生成哈希，使卫星对象可用于集合和字典
+        """
+        return hash(self.ID)
+
     def createReceiveBlockProcess(self, block, propTime):
         """
         Function which starts a receiveBlock process upon receiving a block from a transmitter.

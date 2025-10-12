@@ -119,7 +119,7 @@ class Gateway:
 
                     block.path = self.paths[destination.name]
 
-                    if self.earth.pathParam == 'Q-Learning' or self.earth.pathParam == 'Deep Q-Learning':
+                    if self.earth.pathParam == 'Q-Learning' or self.earth.pathParam == 'Deep Q-Learning' or self.earth.pathParam == 'Policy Distillation':
                         block.QPath = [block.path[0], block.path[1], block.path[len(block.path)-1]]
                         # We add a Qpath field for the Q-Learning case. Only source and destination will be added
                         # after that, every hop will be added at the second last position.

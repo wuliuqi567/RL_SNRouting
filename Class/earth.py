@@ -34,6 +34,7 @@ class Earth:
         self.loss   = []
         self.lossAv = []
         self.DDQNA  = None
+        self.agent = None
         self.step   = 0
         self.nMovs  = 0     # number of total movements done by the constellation
         self.epsilon= []    # set of epsilon values
@@ -1448,26 +1449,26 @@ class Earth:
             for GT in self.gateways:
                 GT.graph = graph
 
-            if self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Q-Learning':
+            if self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Q-Learning' or self.pathParam == 'Policy Distillation':
                 self.updateSatelliteProcessesRL(graph)
             else:
                 self.updateSatelliteProcessesCorrect(graph)
 
             self.updateGTPaths()
             self.nMovs += 1
-            if saveISLs:
-                print('Constellation moved! Saving ISLs map...')
-                islpath = self.outputPath + '/ISL_maps/'
-                os.makedirs(islpath, exist_ok=True) 
-                self.plotMap(plotGT = True, plotSat = True, edges=True, save = True, outputPath=islpath, n=self.nMovs)
-                plt.close()
+            # if saveISLs:
+            #     print('Constellation moved! Saving ISLs map...')
+            #     islpath = self.outputPath + '/ISL_maps/'
+            #     os.makedirs(islpath, exist_ok=True) 
+            #     self.plotMap(plotGT = True, plotSat = True, edges=True, save = True, outputPath=islpath, n=self.nMovs)
+            #     plt.close()
 
             # Perform Federated Learning
-            if FL_Test:
-                global const_moved
-                const_moved = True
-                CKA_before, CKA_after = perform_FL(self)#, outputPath)
-                self.CKA.append([CKA_before, CKA_after, env.now])
+            # if FL_Test:
+            #     global const_moved
+            #     const_moved = True
+            #     CKA_before, CKA_after = perform_FL(self)#, outputPath)
+            #     self.CKA.append([CKA_before, CKA_after, env.now])
 
     def testFlowConstraint1(self, graph):
         highestDist = (0,0)

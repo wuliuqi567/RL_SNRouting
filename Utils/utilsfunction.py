@@ -408,7 +408,119 @@ def greedyMatching(earth):
 
     return _A_Greedy
 
+def positive_Grid_matching(earth):
+    '''
+    Returns a list of edge class elements based on a positive grid matching algorithm.
+    Each satellite is connected to its upper and lower satellite in the same orbital plane (intra-plane),
+    and the nearest satellites to the east and west in different planes (inter-plane).
+    The slant range and the data rate between satellites are stored as attributes in the edge class.
+    '''
 
+    _A_Positive_Grid = []  # list to store edges
+    Satellites = []  # list of all satellites
+
+    # Collect all satellites from each plane
+    for plane in earth.LEO:
+        for sat in plane.sats:
+            Satellites.append(sat)
+
+    N = len(Satellites)
+
+    # inter-plane ISL 
+    ##############################################################
+    # link parameters
+    interISL = RFlink(
+        frequency=f,
+        bandwidth=B,
+        maxPtx=maxPtx,
+        aDiameterTx=Adtx,
+        aDiameterRx=Adrx,
+        pointingLoss=pL,
+        noiseFigure=Nf,
+        noiseTemperature=Tn,
+        min_rate=min_rate
+    )
+
+   # max slant range for each orbit
+    ###########################################################
+    M = len(earth.LEO)              # Number of planes in LEO
+    Max_slnt_rng = np.zeros((M,M))  # All ISL slant ranges must be lowe than 'Max_slnt_rng[i, j]'
+
+    Orb_heights  = []
+    for plane in earth.LEO:
+        Orb_heights.append(plane.h)
+        maxSlantRange = plane.sats[0].maxSlantRange
+
+    for _i in range(M):
+        for _j in range(M):
+            Max_slnt_rng[_i,_j] = (np.sqrt( (Orb_heights[_i] + Re)**2 - Re**2 ) +
+                                np.sqrt( (Orb_heights[_j] + Re)**2 - Re**2 ) )
+            
+    # Compute positions and slant ranges
+    ##############################################################
+    direction       = get_direction(Satellites)             # get both directions of the satellites to use the two transceivers
+    Positions, meta = get_pos_vectors_omni(Satellites)      # position and plane of all the satellites
+    slant_range     = get_slant_range_optimized(Positions, N)                       # matrix with all the distances between sat
+    slant_range_los = los_slant_range(slant_range, meta, Max_slnt_rng, Positions)   # distance matrix but if d>dMax, d=infinite
+    shannonRate     = get_data_rate(slant_range_los, interISL)
+    
+    # Create edges for inter-plane links (closest east and west satellites)
+    for i, sat in enumerate(Satellites):
+        east, west = None, None
+        east_distance, west_distance = float('inf'), float('inf')
+        sat_of_orbit = sat.in_plane
+        num_of_sat = sat.i_in_plane
+        
+        east_orbit = (sat_of_orbit + 1) % len(earth.LEO)
+        west_orbit = (sat_of_orbit - 1) % len(earth.LEO)
+        east = earth.LEO[east_orbit].sats[num_of_sat]
+        west = earth.LEO[west_orbit].sats[num_of_sat]
+        east_distance = slant_range_los[i, Satellites.index(east)]
+        west_distance = slant_range_los[i, Satellites.index(west)]
+        
+        if east_distance == math.inf:
+            east = None
+            print(f"Satellite {sat.ID} has no east satellite based on positive grid matching.")
+        if west_distance == math.inf:
+            west = None
+            print(f"Satellite {sat.ID} has no west satellite based on positive grid matching.")
+
+        # Add edges for east and west satellites
+        if east:
+            _A_Positive_Grid.append(edge(sat.ID, east.ID, east_distance, None, None, shannonRate[i, Satellites.index(east)]))
+        if west:
+            _A_Positive_Grid.append(edge(sat.ID, west.ID, west_distance, None, None, shannonRate[i, Satellites.index(west)]))
+
+    # intra-plane ISL links (upper and lower neighbors)
+    ##############################################################
+    for plane in earth.LEO:
+        nPerPlane = len(plane.sats)
+        for sat in plane.sats:
+            sat.findIntraNeighbours(earth)
+
+            # upper neighbour
+            i = sat.in_plane        *nPerPlane    +sat.i_in_plane
+            j = sat.upper.in_plane  *nPerPlane    +sat.upper.i_in_plane
+
+            _A_Positive_Grid.append(edge(sat.ID, sat.upper.ID,     # satellites IDs
+            slant_range_los[i, j],                          # distance between satellites
+            None, None,                                     # directions
+            shannonRate[i,j]))                              # Max dataRate
+
+            # lower neighbour
+            j = sat.lower.in_plane  *nPerPlane    +sat.lower.i_in_plane
+
+            _A_Positive_Grid.append(edge(sat.ID, sat.lower.ID,     # satellites IDs
+            slant_range_los[i, j],                          # distance between satellites
+            None, None,                                     # directions
+            shannonRate[i,j]))                              # Max dataRate
+    
+    return _A_Positive_Grid
+            
+            
+            
+            
+            
 def deleteDuplicatedLinks(satA, g, earth):
     '''
     Given a satellite, searches for its east and west neighbour. If the east or west link is duplicated,
@@ -514,9 +626,15 @@ def establishRemainingISLs(earth, g):
     # Establish links from closest to farthest in terms of horizontal alignment
     for lat_diff, sat_r, sat_l, distance in potential_links:
         if sat_r.right is None and sat_l.left is None:
+            # 避免除零错误：当shannonRate为0时使用默认最小速率
+            shannon_rate_val = shannonRate[Satellites.index(sat_r), Satellites.index(sat_l)]
+            if shannon_rate_val <= 0:
+                print(f"Warning: Shannon rate is {shannon_rate_val} for link {sat_r.ID}-{sat_l.ID}, using minimum rate")
+                shannon_rate_val = 1e6  # 1 Mbps 作为默认最小速率
+            
             g.add_edge(sat_r.ID, sat_l.ID, slant_range=distance,
-                       dataRate=1/shannonRate[Satellites.index(sat_r), Satellites.index(sat_l)],
-                       dataRateOG=shannonRate[Satellites.index(sat_r), Satellites.index(sat_l)], hop=1)
+                       dataRate=1/shannon_rate_val,
+                       dataRateOG=shannon_rate_val, hop=1)
             sat_r.right = sat_l
             sat_l.left = sat_r
             # print(f"Established horizontal link between {sat_r.ID} (right) and {sat_l.ID} (left) with latitude difference {lat_diff:.2f} deg and distance: {distance/1000:.2F} km.")
@@ -557,6 +675,8 @@ def createGraph(earth, matching='Greedy'):
         markovEdges = markovianMatchingTwo(earth)
     elif matching=='Greedy':
         markovEdges = greedyMatching(earth)
+    elif matching=='Positive_Grid':
+        markovEdges = positive_Grid_matching(earth)
     print(f'Matching: {matching}')
     # print('----------------------------------')
 
@@ -954,6 +1074,74 @@ def getDistanceReward(satA, satB, destination, w2):
     TSLa = getSlantRange(satA, destination)
     TSLb = getSlantRange(satB, destination)
     return w2*((2*TSLa-TSLb)/TSLa + balance)
+
+def getDistanceRewardV2(sat, nextSat, satU, satD, satR, satL, destination, w2):
+    '''
+    Computes the reward by comparing how closer you get to the destination in terms of KM (SLr, Slant Range Reduction) with the
+    average distance with all your neighbours (SLav, Slant Range average)
+    If any of the linked satellites is not available, it is handled
+    SLr/SLav + balance
+    '''
+
+    SLr = getSlantRange(sat, destination) - getSlantRange(nextSat, destination)
+    SLU = SLD = SLR = SLL = 0
+    count = 0
+
+    # Calculate slant range for each satellite, if it is not None
+    if satU is not None:
+        SLU = getSlantRange(satU, sat)
+        count += 1
+    if satD is not None:
+        SLD = getSlantRange(satD, sat)
+        count += 1
+    if satR is not None:
+        SLR = getSlantRange(satR, sat)
+        count += 1
+    if satL is not None:
+        SLL = getSlantRange(satL, sat)
+        count += 1
+
+    SLav = (SLU + SLD + SLR + SLL) / count if count > 0 else 0
+
+    return w2 * (SLr / SLav) if SLav != 0 else 0
+
+
+def getDistanceRewardV3(sat, nextSat, satU, satD, satR, satL, destination, w2):
+    '''
+    Returns the distance reward computed by comparing how closer you get to the destination in terms of KM (SLr, Slant Range Reduction) with
+    how close you could get as maximum taking the other options going to any of the other neighbours (max(SLrs), max(Slant range reductions from all the neighbours))
+    reward = SLr/max(SLs)
+    '''
+    SLr = getSlantRange(sat, destination) - getSlantRange(nextSat, destination)
+    SLrs= []
+
+    if satU is not None:
+        SLrs.append(getSlantRange(sat, destination) - getSlantRange(satU, destination))
+    if satD is not None:
+        SLrs.append(getSlantRange(sat, destination) - getSlantRange(satD, destination))
+    if satR is not None:
+        SLrs.append(getSlantRange(sat, destination) - getSlantRange(satR, destination))
+    if satL is not None:
+        SLrs.append(getSlantRange(sat, destination) - getSlantRange(satL, destination))
+
+    return w2*SLr/max(SLrs)
+
+
+def getDistanceRewardV4(sat, nextSat, satDest, w2, w4):
+    global biggestDist
+    SLr = getSlantRange(sat, satDest) - getSlantRange(nextSat, satDest)
+    TravelDistance = getSlantRange(sat, nextSat)
+    if TravelDistance > biggestDist:
+        # print(f'Very big distance: {sat.ID}, {nextSat.ID}')
+        pass
+    return w2*(SLr-TravelDistance/w4)/biggestDist
+    # return w2*(SLr/biggestDist)
+    # return w2*SLr/1000000
+
+
+def getDistanceRewardV5(sat, nextSat, w2):
+    SLr = getSlantRange(sat, nextSat)
+    return w2*SLr/1000000
 
 def getQueueReward(queueTime, w1):
     '''

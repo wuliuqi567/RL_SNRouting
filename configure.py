@@ -1,6 +1,6 @@
 # HOT PARAMS - This parameters should be revised before every simulation
-pathings    = ['hop', 'dataRate', 'dataRateOG', 'slant_range', 'Q-Learning', 'Deep Q-Learning']
-pathing     = pathings[5]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
+pathings    = ['hop', 'dataRate', 'dataRateOG', 'slant_range', 'Q-Learning', 'Deep Q-Learning', 'Policy Distillation']
+pathing     = pathings[6]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
 
 FL_Test     = True     # If True, it plots the model divergence the model divergence between agents
 plotSatID   = True      # If True, plots the ID of each satellite
@@ -66,7 +66,7 @@ BLOCK_SIZE   = 64800
 # ndeltas     = 5805.44/20#1 Movement speedup factor. This number will multiply deltaT. If bigger, will make the rotation distance bigger
 saveISLs    = True     # save ISLs map
 const_moved = False     # Movement flag. If up, it means it has moved
-matching    = 'Greedy'  # ['Markovian', 'Greedy']
+matching    = 'Positive_Grid'  # ['Markovian', 'Greedy', 'Positive_Grid']
 minElAngle  = 30        # For satellites. Value is taken from NGSO constellation design chapter.
 mixLocs     = False     # If true, every time we make a new simulation the locations are going to change their order of selection
 rotateFirst = False     # If True, the constellation starts rotated by 1 movement defined by ndeltas
@@ -76,24 +76,25 @@ coordGran   = 20            # Granularity of the coordinates that will be the in
 diff        = True          # If up, the state space gives no coordinates about the neighbor and destination positions but the difference with respect to the current positions
 diff_lastHop= True          # If up, this state is the same as diff, but it includes the last hop where the block was in order to avoid loops
 reducedState= False         # if set to true the DNN will receive as input only the positional information, but not the queueing information
+third_adj    = True          # If up, the state space includes the 3rd order neighbors information
 notAvail    = 0             # this value is set in the state space when the satellite neighbour is not available
 
 # Learning Hyperparameters
 ddqn        = True      # Activates DDQN, where now there are two DNNs, a target-network and a q-network
 # importQVals = False     # imports either QTables or NN from a certain path
 plotPath    = False     # plots the map with the path after every decision
-alpha       = 0.25      # learning rate for Q-Tables
-alpha_dnn   = 0.01      # learning rate for the deep neural networks
+alpha       = 0.00005      # learning rate for Q-Tables
+alpha_dnn   = alpha      # learning rate for the deep neural networks
 # gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
 epsilon     = 0.1       # exploration factor for Q-Learning ONLY
-tau         = 0.1       # rate of copying the weights from the Q-Network to the target network
-learningRate= 0.001     # Default learning rate for Adam optimizer
+tau         = 0.01       # rate of copying the weights from the Q-Network to the target network
+learningRate= alpha     # Default learning rate for Adam optimizer
 plotDeliver = False     # create pictures of the path every 1/10 times a data block gets its destination
 # plotSatID   = False     # If True, plots the ID of each satellite
 GridSize    = 8         # Earth divided in GridSize rows for the grid. Used to be 15
 winSize     = 20        # window size for the representation in the plots
 markerSize  = 50        # Size of the markers in the plots
-nTrain      = 2         # The DNN will train every nTrain steps
+nTrain      = 120         # The DNN will train every nTrain steps
 noPingPong  = True      # when a neighbour is the destination satellite, send there directly without going through the dnn (Change policy)
 
 # Queues & State
@@ -120,14 +121,14 @@ distanceRew = 4          # 1: Distance reward normalized to total distance.
 # Deep Learning
 MAX_EPSILON = 0.99      # Maximum value that the exploration parameter can have
 MIN_EPSILON = 0.001     # Minimum value that the exploration parameter can have
-LAMBDA      = 0.0005    # This value is used to decay the epsilon in the deep learning implementation
-decayRate   = 4         # sets the epsilon decay in the deep learning implementatio. If higher, the decay rate is slower. If lower, the decay is faster
+LAMBDA      = 0.0005   # This value is used to decay the epsilon in the deep learning implementation
+decayRate   = 70        # sets the epsilon decay in the deep learning implementatio. If higher, the decay rate is slower. If lower, the decay is faster
 Clipnorm    = 1         # Maximum value to the nom of the gradients. Prevents the gradients of the model parameters with respect to the loss function becoming too large
 hardUpdate  = 1         # if up, the Q-network weights are copied inside the target network every updateF iterations. if down, this is done gradually
-updateF     = 1000      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
-batchSize   = 16        # batchSize samples are taken from bufferSize samples to train the network
-bufferSize  = 50        # bufferSize samples are used to train the network
-
+updateF     = 2000      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
+batchSize   = 32        # batchSize samples are taken from bufferSize samples to train the network
+bufferSize  = 30000        # bufferSize samples are used to train the network
+train_epoch = 4
 # Stop Loss
 # Train       = True      # Global for all scenarios with different number of GTs. if set to false, the model will not train any of them
 stopLoss    = False     # activates the stop loss function
@@ -135,6 +136,10 @@ nLosses     = 50        # Nº of loss samples used for the stop loss
 lThreshold  = 0.5       # If the mean of the last nLosses are lower than lossThreshold, the mdoel stops training
 TrainThis   = Train     # Local for a single scenario with a certain number of GTs. If the stop loss is activated, this will be set to False and the scenario will not train anymore. 
                         # When another scenario is about to run, TrainThis will be set to Train again
+
+# GPU/CPU settings
+use_gpu     = True      # 是否使用GPU加速（如果可用）。如果设为False，将强制使用CPU
+print_device_info = True # 是否打印设备信息
 
 # Other
 CurrentGTnumber = -1    # Number of active gateways. This number will be updated every time a gateway is added. In the simulation it will iterate the GTs list

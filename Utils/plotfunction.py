@@ -8,6 +8,7 @@ import pickle
 import pandas as pd
 from collections import defaultdict
 import seaborn as sns
+import torch
 
 def plotLatencies(percentages, pathing, savePath):
     '''
@@ -346,16 +347,18 @@ def save_plot_rewards(outputPath, reward, GTnumber, window_size=200):
     data['Smoothed Rewards'] = data['Rewards'].rolling(window=window_size).mean()
 
     # Top 10% and Bottom 10% Rewards
-    data['Top 10% Avg Rewards'] = data['Rewards'].rolling(window=window_size).apply(lambda x: np.mean(np.partition(x, -int(len(x)*0.1))[-int(len(x)*0.1):]), raw=True)
-    data['Bottom 10% Avg Rewards'] = data['Rewards'].rolling(window=window_size).apply(lambda x: np.mean(np.partition(x, int(len(x)*0.1))[:int(len(x)*0.1)]), raw=True)
+    # data['Top 10% Avg Rewards'] = data['Rewards'].rolling(window=window_size).apply(lambda x: np.mean(np.partition(x, -int(len(x)*0.1))[-int(len(x)*0.1):]), raw=True)
+    # data['Bottom 10% Avg Rewards'] = data['Rewards'].rolling(window=window_size).apply(lambda x: np.mean(np.partition(x, int(len(x)*0.1))[:int(len(x)*0.1)]), raw=True)
 
     # Plotting
     plt.figure(figsize=(8, 4))
-    line1, = plt.plot(data['Time'], data['Top 10% Avg Rewards'], color='skyblue', linewidth=2, label='Top 10% reward')
+    # line1, = plt.plot(data['Time'], data['Top 10% Avg Rewards'], color='skyblue', linewidth=2, label='Top 10% reward')
     line2, = plt.plot(data['Time'], data['Smoothed Rewards'], color='blue', linewidth=2, label='Average reward')
-    line3, = plt.plot(data['Time'], data['Bottom 10% Avg Rewards'], color='navy', linewidth=2, label='Bottom 10% reward')
+    # line3, = plt.plot(data['Time'], data['Bottom 10% Avg Rewards'], color='navy', linewidth=2, label='Bottom 10% reward')
 
-    plt.legend(handles=[line1, line2, line3], fontsize=15, loc='upper right')
+    # plt.legend(handles=[line1, line2, line3], fontsize=15, loc='upper right')
+    plt.legend(handles=[line2], fontsize=15, loc='upper right')
+    
     plt.xticks(fontsize=15)
     plt.yticks(fontsize=15)
     plt.xlabel("Time [ms]", fontsize=15)
@@ -755,13 +758,29 @@ def saveDeepNetworks(outputPath, earth):
     print('Saving Deep Neural networks at: ' + outputPath)
     os.makedirs(outputPath, exist_ok=True) 
     if not onlinePhase:
-        earth.DDQNA.qNetwork.save(outputPath + 'qNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.h5')
+        torch.save(earth.DDQNA.qNetwork.state_dict(), outputPath + 'qNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
         if ddqn:
-            earth.DDQNA.qTarget.save(outputPath + 'qTarget_'+ str(len(earth.gateways)) + 'GTs' + '.h5')
+            torch.save(earth.DDQNA.qTarget.state_dict(), outputPath + 'qTarget_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
     else:
         for plane in earth.LEO:
             for sat in plane.sats:
-                sat.DDQNA.qNetwork.save(outputPath + sat.ID + 'qNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.h5')
+                torch.save(sat.DDQNA.qNetwork.state_dict(), outputPath + sat.ID + 'qNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
                 if ddqn:
-                    sat.DDQNA.qTarget.save(outputPath + sat.ID + 'qTarget_'+ str(len(earth.gateways)) + 'GTs' + '.h5')
+                    torch.save(sat.DDQNA.qTarget.state_dict(), outputPath + sat.ID + 'qTarget_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
 
+
+def saveNNModel(outputPath, earth):
+    print('Saving Deep Neural networks at: ' + outputPath)
+    os.makedirs(outputPath, exist_ok=True) 
+    if not onlinePhase:
+        torch.save(earth.DDQNA.qNetwork.state_dict(), outputPath + 'qNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
+        if ddqn:
+            torch.save(earth.DDQNA.qTarget.state_dict(), outputPath + 'qTarget_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
+            torch.save(earth.DDQNA.sNetwork.state_dict(), outputPath + 'sNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
+    else:
+        for plane in earth.LEO:
+            for sat in plane.sats:
+                torch.save(sat.DDQNA.qNetwork.state_dict(), outputPath + sat.ID + 'qNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
+                if ddqn:
+                    torch.save(sat.DDQNA.qTarget.state_dict(), outputPath + sat.ID + 'qTarget_'+ str(len(earth.gateways)) + 'GTs' + '.pth')
+                    torch.save(sat.DDQNA.sNetwork.state_dict(), outputPath + sat.ID + 'sNetwork_'+ str(len(earth.gateways)) + 'GTs' + '.pth')

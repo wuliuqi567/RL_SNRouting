@@ -20,7 +20,7 @@ import gc
 import builtins
 from Class.earth import Earth
 from Class.auxiliaryClass import *
-
+from Algorithm.policy_distillation import TSDDQNetwork
 
 class hyperparam:
     def __init__(self, pathing):
@@ -28,6 +28,7 @@ class hyperparam:
         Hyperparameters of the Q-Learning model
         '''
         self.alpha      = alpha
+        self.lr       = learningRate
         self.gamma      = gamma
         self.epsilon    = epsilon
         self.ArriveR    = ArriveReward
@@ -39,6 +40,9 @@ class hyperparam:
         self.pathing    = pathing
         self.tau        = tau
         self.updateF    = updateF
+        self.decayRate  = decayRate
+        self.nTrain     = nTrain
+        self.train_epoch = train_epoch
         self.batchSize  = batchSize
         self.bufferSize = bufferSize
         self.hardUpdate = hardUpdate==1
@@ -56,6 +60,7 @@ class hyperparam:
         self.reducedState= reducedState
         self.online     = onlinePhase
         self.diff_lastHop = diff_lastHop
+        self.third_adj = third_adj
  
     def __repr__(self):
         return 'Hyperparameters:\nalpha: {}\ngamma: {}\nepsilon: {}\nw1: {}\nw2: {}\n'.format(
@@ -69,32 +74,14 @@ class hyperparam:
 def saveHyperparams(outputPath, inputParams, hyperparams):
     print('Saving hyperparams at: ' + str(outputPath))
     hyperparams = ['Constellation: ' + str(inputParams['Constellation'][0]),
-                'Import QTables: ' + str(hyperparams.importQ),
-                'plotPath: ' + str(hyperparams.plotPath),
                 'Test length: ' + str(inputParams['Test length'][0]),
-                'Alphas: ' + str(hyperparams.alpha) + ', ' + str(alpha_dnn),
-                'Gamma: ' + str(hyperparams.gamma),
-                'Epsilon: ' + str(hyperparams.epsilon), 
-                'Max epsilon: ' + str(hyperparams.MAX_EPSILON), 
-                'Min epsilon: ' + str(hyperparams.MIN_EPSILON), 
-                'Arrive Reward: ' + str(hyperparams.ArriveR), 
-                'w1: ' + str(hyperparams.w1), 
-                'w2: ' + str(hyperparams.w2),
-                'w4: ' + str(hyperparams.w4),
-                'againPenalty: ' + str(hyperparams.again),
-                'unavPenalty: ' + str(hyperparams.unav),
-                'Coords granularity: ' + str(hyperparams.coordGran),
+                'decayRate: ' + str(hyperparams.decayRate),
+                'lr: ' + str(hyperparams.alpha),
+                'nepoch: ' + str(hyperparams.train_epoch),
+                'nTrain: ' + str(hyperparams.nTrain),
                 'Update freq: ' + str(hyperparams.updateF),
                 'Batch Size: ' + str(hyperparams.batchSize),
-                'Buffer Size: ' + str(hyperparams.bufferSize),
-                'Hard Update: ' + str(hyperparams.hardUpdate),
-                'Exploration: ' + str(hyperparams.explore),
-                'DDQN: ' + str(hyperparams.ddqn),
-                'Latitude bias: ' + str(hyperparams.latBias),
-                'Longitude bias: ' + str(hyperparams.lonBias),
-                'Diff: ' + str(hyperparams.diff),
-                'Reduced State: ' + str(hyperparams.reducedState),
-                'Online phase: ' + str(hyperparams.online)]
+                'Buffer Size: ' + str(hyperparams.bufferSize)]
 
     # save hyperparams
     with open(outputPath + 'hyperparams.txt', 'w') as f:
@@ -228,8 +215,9 @@ def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementT
     print('----------------------------------')
 
     # In case we want to train the constellation we initialize the Q-Tables
-    if pathing == 'Q-Learning' or pathing == 'Deep Q-Learning':
+    if pathing == 'Q-Learning' or pathing == 'Deep Q-Learning' or pathing == 'Policy Distillation':
         hyperparams = hyperparam(pathing)
+        hyperparams.outputPath = outputPath
     if pathing == 'Deep Q-Learning':
         if not onlinePhase:
             # Initialize global agent
@@ -243,9 +231,23 @@ def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementT
                 for sat in plane.sats:
                     sat.DDQNA = DDQNAgent(len(earth.gateways), hyperparams, earth, sat.ID)
             print('----------------------------------')
-
+    elif pathing == 'Policy Distillation':
+        if not onlinePhase:
+            # Initialize global agent
+            earth.DDQNA = TSDDQNetwork(len(earth.gateways), hyperparams, earth)
+        else:
+            print('----------------------------------')
+            print('Creating satellites agents...')
+            if importQVals:
+                print:(f'Importing the Neural networks from: \n{nnpath}\n{nnpathTarget}')
+            for plane in earth.LEO:
+                for sat in plane.sats:
+                    sat.DDQNA = TSDDQNetwork(len(earth.gateways), hyperparams, earth, sat.ID)
+            print('----------------------------------')
+    
+    
     # save hyperparams
-    if pathing == 'Q-Learning' or pathing == "Deep Q-Learning":
+    if pathing == 'Q-Learning' or pathing == "Deep Q-Learning" or pathing == 'Policy Distillation':
         saveHyperparams(earth.outputPath, inputParams, hyperparams)
 
     if pathing == 'Q-Learning':
@@ -329,12 +331,12 @@ def RunSimulation(GTs, inputPath, outputPath, populationData, radioKM):
 
 
 # print ISL on Earth
-        print('Saving ISLs map...')
-        islpath = outputPath + '/ISL_maps/'
-        os.makedirs(islpath, exist_ok=True) 
-        earth1.plotMap(plotGT = True, plotSat = True, edges=True, save = True, outputPath=islpath, n=earth1.nMovs)
-        plt.close()
-        print('----------------------------------')
+        # print('Saving ISLs map...')
+        # islpath = outputPath + '/ISL_maps/'
+        # os.makedirs(islpath, exist_ok=True) 
+        # earth1.plotMap(plotGT = True, plotSat = True, edges=True, save = True, outputPath=islpath, n=earth1.nMovs)
+        # plt.close()
+        # print('----------------------------------')
 
 
 
@@ -372,19 +374,21 @@ def RunSimulation(GTs, inputPath, outputPath, populationData, radioKM):
 
 
             
-            if pathing == "Deep Q-Learning" or pathing == 'Q-Learning':
+            if pathing == "Deep Q-Learning" or pathing == 'Q-Learning' or pathing == 'Policy Distillation':
 
                 # save & plot rewards in /Rewards/
+                print('Plotting rewards...')
                 save_plot_rewards(outputPath, earth1.rewards, GTnumber)
 
                 
                 if not onlinePhase:
-                    eps = earth1.DDQNA.epsilon if pathing == "Deep Q-Learning" else earth1.epsilon
+                    eps = earth1.DDQNA.epsilon if pathing == "Deep Q-Learning" or pathing == 'Policy Distillation' else earth1.epsilon
                 else:
                     eps = earth1.LEO[0].sats[0].DDQNA.epsilon if pathing == "Deep Q-Learning" else earth1.epsilon
                 # save epsilons
                 if Train:
                     epsDF = save_epsilons(outputPath, eps, GTnumber)
+                    print('Plotting training counts...')
                     save_training_counts(outputPath, earth1.trains, GTnumber)
                 else:
                     epsDF = None
@@ -392,8 +396,8 @@ def RunSimulation(GTs, inputPath, outputPath, populationData, radioKM):
                 # save & plot all paths latencies
                 print('Plotting latencies...')
                 plotSaveAllLatencies(outputPath, GTnumber, allLatencies, epsDF)
-            
-            if pathing == "Deep Q-Learning":
+
+            if pathing == "Deep Q-Learning" or pathing == 'Policy Distillation':
                 # save losses
                 save_losses(outputPath, earth1, GTnumber)
                 if FL_Test and const_moved:
@@ -442,6 +446,8 @@ def RunSimulation(GTs, inputPath, outputPath, populationData, radioKM):
             saveQTables(outputPath, earth1)
         elif pathing == 'Deep Q-Learning':
             saveDeepNetworks(outputPath + '/NNs/', earth1)
+        elif pathing == 'Policy Distillation':
+            saveNNModel(outputPath + '/NNs/', earth1)
 
         # percentages.clear()
         receivedDataBlocks  .clear()
@@ -486,8 +492,12 @@ if __name__ == '__main__':
     current_dir = os.getcwd()
 
     # nnpath          = f'./pre_trained_NNs/qNetwork_8GTs.h5'
-    filetime = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    outputPath      = current_dir + '/Results/{}_{}s_[{}]_Del_[{}]_w1_[{}]_w2_{}_GTs_onlinePhase_{}_{}/'.format(pathing, float(pd.read_csv("inputRL.csv")['Test length'][0]), ArriveReward, w1, w2, GTs, onlinePhase, filetime)
+    filetime_ymd = datetime.now().strftime("%Y-%m-%d")
+    filetime_hms = datetime.now().strftime("%H-%M-%S")
+    data_inputrl = pd.read_csv("inputRL.csv")
+    constellation = data_inputrl['Constellation'][0]
+    sim_time = data_inputrl['Test length'][0]
+    outputPath      = current_dir + '/ResultsV2/{}/{}/{}_{}_[{}]s_lr_{}_GTs_{}/'.format(pathing, filetime_ymd, filetime_hms, constellation, sim_time, alpha_dnn, GTs)
     populationMap   = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
     os.makedirs(outputPath, exist_ok=True) 
     sys.stdout = Logger(outputPath + 'logfile.log')
