@@ -30,6 +30,8 @@ class DataBlock:
         self.queueTime= []
         self.oldState  = None
         self.oldAction = None
+        self.stepReward  = []
+        # self.accumulatedReward = 0
         # self.oldReward = None
 
     def getQueueTime(self):

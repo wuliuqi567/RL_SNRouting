@@ -122,7 +122,7 @@ class Earth:
                 constellation.rotate(ndeltas*deltaT)
 
         # Simpy process for handling moving the constellation and the satellites within the constellation
-        self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+        # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
 
     def set_window(self, window):  # function to change/set window for the earth
         """
@@ -875,7 +875,7 @@ class Earth:
                                     'D': linkedSats['D'],
                                     'R': linkedSats['R'],
                                     'L': linkedSats['L']}
-                elif self.pathParam == 'Deep Q-Learning':
+                elif self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Policy Distillation':
                     # update ISL. Intra-plane should not change
                     sat.findIntraNeighbours(self)
                     sat.findInterNeighbours(self)
@@ -910,8 +910,8 @@ class Earth:
                                 nextHop = self.DDQNA.makeDeepAction(block, sat,
                                                                                    sat.orbPlane.earth.gateways[
                                                                                        0].graph,
-                                                                                   sat.orbPlane.earth, prevSat=(
-                                        findByID(sat.orbPlane.earth, block.QPath[len(block.QPath) - 3][0])))
+                                                                                   sat.orbPlane.earth, 
+                                        findByID(sat.orbPlane.earth, block.QPath[len(block.QPath) - 3][0]), 'recalculate')
                             else:
                                 print(f'No learning model for sat: {sat.ID}')
                         else:
@@ -929,7 +929,7 @@ class Earth:
                                 nextHop = self.DDQNA.makeDeepAction(block, sat,
                                                                                    sat.orbPlane.earth.gateways[
                                                                                        0].graph,
-                                                                                   sat.orbPlane.earth)
+                                                                                   sat.orbPlane.earth, None, 'recalculate')
                             else:
                                 print(f'No learning model for sat: {sat.ID}')
 
@@ -980,8 +980,8 @@ class Earth:
                                 nextHop = sat.orbPlane.earth.DDQNA.makeDeepAction(block, sat,
                                                                                   sat.orbPlane.earth.gateways[
                                                                                       0].graph,
-                                                                                  sat.orbPlane.earth, prevSat=(
-                                        findByID(sat.orbPlane.earth, block.QPath[len(block.QPath) - 3][0])))
+                                                                                  sat.orbPlane.earth,
+                                        findByID(sat.orbPlane.earth, block.QPath[len(block.QPath) - 3][0]), 'recalculate')
                         else:
                             if sat.QLearning:
                                 nextHop = sat.QLearning.makeAction(block, sat,
@@ -997,7 +997,7 @@ class Earth:
                                 nextHop = sat.orbPlane.earth.DDQNA.makeDeepAction(block, sat,
                                                                                   sat.orbPlane.earth.gateways[
                                                                                       0].graph,
-                                                                                  sat.orbPlane.earth)
+                                                                                  sat.orbPlane.earth, None, 'recalculate')
 
                         if nextHop != 0:
                             block.QPath[-2] = nextHop
@@ -1042,8 +1042,8 @@ class Earth:
                             nextHop = sat.orbPlane.earth.DDQNA.makeDeepAction(block, sat,
                                                                               sat.orbPlane.earth.gateways[
                                                                                   0].graph,
-                                                                              sat.orbPlane.earth, prevSat=(
-                                    findByID(sat.orbPlane.earth, block.QPath[len(block.QPath) - 3][0])))
+                                                                              sat.orbPlane.earth,
+                                    findByID(sat.orbPlane.earth, block.QPath[len(block.QPath) - 3][0]), 'recalculate')
                     else:
                         if sat.QLearning:
                             nextHop = sat.QLearning.makeAction(block, sat,
@@ -1058,7 +1058,7 @@ class Earth:
                             nextHop = sat.orbPlane.earth.DDQNA.makeDeepAction(block, sat,
                                                                               sat.orbPlane.earth.gateways[
                                                                                   0].graph,
-                                                                              sat.orbPlane.earth)
+                                                                              sat.orbPlane.earth, None, 'recalculate')
 
                     if nextHop != 0:
                         block.QPath[-2] = nextHop

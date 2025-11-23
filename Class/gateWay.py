@@ -68,6 +68,18 @@ class Gateway:
             noiseTemperature=290,
             min_rate=10e3
         )
+        # Per-gateway RNG for reproducible sampling of inter-arrival times
+        # If Earth provides a global seed (earth.rng_seed), derive a gateway-specific seed
+        seed = getattr(earth, 'rng_seed', None)
+        try:
+            if seed is not None:
+                # create a reproducible generator per gateway (add ID to diversify)
+                self.rng = np.random.default_rng(int(seed) + int(self.ID))
+            else:
+                self.rng = np.random.default_rng()
+        except Exception:
+            # fallback to global legacy RNG if Generator cannot be created
+            self.rng = None
 
     def makeFillBlockProcesses(self, GTs):
         """
@@ -503,11 +515,31 @@ class Gateway:
         # regardless of number of active gateways
         flow = self.totalAvgFlow / (len(self.totalLocations) - 1)
 
+        # compute average time (seconds) to fill block for this destination
         avgTime = block.size / flow  # the average time to fill the buffer in seconds
 
-        time = np.random.exponential(scale=avgTime) # the actual time to fill the buffer after adjustment by exp dist.
+        # guard against extreme or invalid values
+        if not np.isfinite(avgTime) or avgTime <= 0:
+            # if avgTime is zero or invalid, return a very small positive time
+            avgTime = 1e-6
 
-        return time
+        # clip scale to reasonable simulation bounds to avoid overflow/very large delays
+        min_scale = 1e-6
+        max_scale = 1e8
+        scale = float(np.clip(avgTime, min_scale, max_scale))
+
+        # Use per-gateway Generator if available for reproducibility, otherwise fall back
+        try:
+            if hasattr(self, 'rng') and self.rng is not None:
+                sampled_time = float(self.rng.exponential(scale=scale))
+            else:
+                # numpy.random.exponential uses the legacy global RNG; do not pass seed here
+                sampled_time = float(np.random.exponential(scale=scale))
+        except Exception:
+            # fallback: deterministic avgTime if RNG fails
+            sampled_time = float(scale)
+
+        return sampled_time
 
     def getTotalFlow(self, avgFlowPerUser, distanceFunc, maxDistance, capacity = None, fraction = 1.0):
         """
@@ -557,7 +589,7 @@ class Gateway:
             else:
                 self.totalAvgFlow = capacity * fraction
                 
-        print(self.name + ': ' + str(self.totalAvgFlow/1000000000))
+        print(self.name + ': ' + str(self.totalAvgFlow/1000000000) + ' Gbps total flow from ' + str(len(self.cellsInRange)) + ' cells.')
 
     def __eq__(self, other):
         if self.latitude == other.latitude and self.longitude == other.longitude:

@@ -122,14 +122,14 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
         
     # save congestion test data
     # blockPath = f"./Results/Congestion_Test/{pathing} {float(pd.read_csv('inputRL.csv')['Test length'][0])}/"
-    print('Saving congestion test data...\n')
-    blockPath = outputPath + '/Congestion_Test/'     
-    os.makedirs(blockPath, exist_ok=True)
-    try:
-        global CurrentGTnumber
-        np.save("{}blocks_{}".format(blockPath, CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
-    except pickle.PicklingError:
-        print('Error with pickle and profiling')
+    # print('Saving congestion test data...\n')
+    # blockPath = outputPath + '/Congestion_Test/'     
+    # os.makedirs(blockPath, exist_ok=True)
+    # try:
+    #     global CurrentGTnumber
+    #     np.save("{}blocks_{}".format(blockPath, CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
+    # except pickle.PicklingError:
+    #     print('Error with pickle and profiling')
 
     avgTime = np.mean(allTransmissionTimes)
     totalTime = sum(allTransmissionTimes)
@@ -138,7 +138,8 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     print(f"The simulation took {timeToSim} seconds to run")
     print(f"A total of {len(createdBlocks)} data blocks were created")
     print(f"A total of {len(receivedDataBlocks)} data blocks were transmitted")
-    print(f"A total of {len(createdBlocks) - len(receivedDataBlocks)} data blocks were stuck")
+    print(f"A total of {len(dropBlocks)} data blocks were lost")
+    print(f"A total of {len(createdBlocks) - len(receivedDataBlocks) - len(dropBlocks)} data blocks were stuck")
     print(f"Average transmission time for all blocks were {avgTime}")
     print('Total latecies:\nQueue time: {}%\nTransmission time: {}%\nPropagation time: {}%'.format(
         '%.4f' % float(sum(queueLat)/totalTime*100),

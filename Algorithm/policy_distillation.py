@@ -61,17 +61,19 @@ class TSDDQNetwork:
         self.bufferS = hyperparams.bufferSize
         self.hardUpd = hyperparams.hardUpdate
         self.importQ = hyperparams.importQ
-        self.online = hyperparams.online
+        # self.online = hyperparams.online
         self.ddqn = hyperparams.ddqn  # 新增：是否启用DDQN
+        self.algorithm = hyperparams.pathing
         self.outputPath = hyperparams.outputPath if hasattr(hyperparams, 'outputPath') else '../Results'
-        
+        self.distillationLR = hyperparams.distillationLR if hasattr(hyperparams, 'distillationLR') else 0.00005
+        self.distillationLossFun = hyperparams.distillationLossFun if hasattr(hyperparams, 'distillationLossFun') else 'MSE'
         self.step = 0
         self.i = 0
         self.epsilon = []
         self.experienceReplay = ExperienceReplay(self.bufferS)  # 假设ExperienceReplay已适配PyTorch
 
         # 初始化网络
-        if not self.importQ:
+        if Train:
             self.qNetwork = QNetwork(self.stateSize, self.actionSize).to(self.device)
             if self.ddqn:
                 self.qTarget = QNetwork(self.stateSize, self.actionSize).to(self.device)
@@ -107,14 +109,22 @@ class TSDDQNetwork:
         self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer,
                                                            start_factor=1.0,
                                                            end_factor=0.5,
-                                                           total_iters=100000)
-        self.student_optimizer = optim.Adam(self.sNetwork.parameters(), lr=0.0001)
+                                                           total_iters=10000000)
+        self.student_optimizer = optim.Adam(self.sNetwork.parameters(), lr=self.distillationLR)
         self.loss_fn = nn.SmoothL1Loss()  # Huber损失对应PyTorch的SmoothL1Loss
+        if self.distillationLossFun == 'MSE':
+            self.distillation_loss_fn = nn.MSELoss()
+        elif self.distillationLossFun == 'Huber':
+            self.distillation_loss_fn = nn.SmoothL1Loss()
+        elif self.distillationLossFun == 'KL':
+            self.distillation_loss_fn = kl_distillation_loss
+        elif self.distillationLossFun == 'KL_v2':
+            self.distillation_loss_fn = kl_distillation_loss_v2
         self.mse_loss = nn.MSELoss()  # 均方误差损失
         
         # SwanLab初始化标志
         self.swanlab_initialized = True
-        if self.swanlab_initialized:
+        if self.swanlab_initialized and Train:
             init_swanlab(hyperparams)
 
 
@@ -135,7 +145,10 @@ class TSDDQNetwork:
         else:
             # 利用Q网络预测
             with torch.no_grad():
-                qValues = self.qNetwork(state_tensor)
+                if importSnetwork:
+                    qValues = self.sNetwork(state_tensor)
+                else:
+                    qValues = self.qNetwork(state_tensor)
             qValues = qValues.cpu().numpy().flatten()
             actIndex = np.argmax(qValues)
             action = self.actions[actIndex]
@@ -153,11 +166,14 @@ class TSDDQNetwork:
             return -1
         return [destination.ID, math.degrees(destination.longitude), math.degrees(destination.latitude)], actIndex
 
-    def makeDeepAction(self, block, sat, g, earth, prevSat=None):
+    def makeDeepAction(self, block, sat, g, earth, prevSat=None, *args):
+        
         linkedSats = getDeepLinkedSats(sat, g, earth)
         
-        if self.third_adj:
+        if self.third_adj and Train:
             newState = obtain_3rd_order_neighbor_info(block, sat, g, earth)
+        elif self.third_adj and not Train:
+            newState = obtain_1rd_neighbor_info(block, sat, g, earth)
         else:
             newState = getDeepState(block, sat, linkedSats)
         
@@ -165,7 +181,29 @@ class TSDDQNetwork:
             earth.lostBlocks += 1
             return 0
         self.step += 1
-
+        
+        # if hop exceed max hops, return -1
+        if len(block.QPath) > 110:
+            if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
+                pass
+            else:
+                hop_penalty = -ArriveReward
+                satDest = block.destination.linkedSat[1]
+                distanceReward  = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+                queueReward     = getQueueReward   (block.queueTime[len(block.queueTime)-1], self.w1)
+                reward = hop_penalty + distanceReward + queueReward
+                # 添加奖励大小约束到-1到1之间
+                
+                                                         
+                if not args:
+                    block.stepReward.append(reward)
+                else:
+                    block.stepReward[-1] = reward
+                self.experienceReplay.store(block.oldState, block.oldAction, reward, newState, True)
+                self.earth.rewards.append([reward, sat.env.now])
+                if Train:
+                    log_reward(sum(block.stepReward) if block.stepReward else reward)
+                return -1
         # 检查是否到达目标网关
         if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
             # 计算奖励并存储经验
@@ -180,11 +218,17 @@ class TSDDQNetwork:
                 reward          = distanceReward + ArriveReward
             else:
                 reward = ArriveReward  # 需根据具体逻辑调整
+
+            if not args:
+                block.stepReward.append(reward)
+            else:
+                block.stepReward[-1] = reward
             self.experienceReplay.store(block.oldState, block.oldAction, reward, newState, True)
             self.earth.rewards.append([reward, sat.env.now])
             
             # 记录到达奖励
-            log_reward(reward)
+            if Train:
+                log_reward(sum(block.stepReward) if block.stepReward else reward)
             
             return 0
 
@@ -226,10 +270,17 @@ class TSDDQNetwork:
                 queueReward = 0 # FIXME In some hop the queue time was not appended to block.queueTime, line 620
             reward          = distanceReward + again + queueReward
 
+            if not args:
+                block.stepReward.append(reward)
+            else:
+                if len(block.stepReward) > 0:
+                    block.stepReward[-1] = reward
+                else:
+                    block.stepReward.append(reward)
             # 存储经验
             self.experienceReplay.store(block.oldState, block.oldAction, reward, newState, False)
-            self.earth.rewards.append([reward, sat.env.now])
-            log_reward(reward)
+            # self.earth.rewards.append([reward, sat.env.now])
+            # log_reward(reward)
 
 
         if Train and self.step % nTrain == 0:
@@ -251,7 +302,7 @@ class TSDDQNetwork:
         return nextHop
 
     def alignEpsilon(self, step, sat):
-        epsilon = self.minEps + (self.maxEps - self.minEps) * math.exp(-LAMBDA * step / (decayRate * (CurrentGTnumber**2)))
+        epsilon = self.minEps + (self.maxEps - self.minEps) * math.exp(-LAMBDA * step/10 / (decayRate * (CurrentGTnumber**2)))
         self.epsilon.append([epsilon, sat.env.now])
         return epsilon
 
@@ -276,19 +327,13 @@ class TSDDQNetwork:
             # 从经验回放中采样
             miniBatch = self.experienceReplay.getBatch(self.batchS)
             states, actions, rewards, next_states, dones = zip(*miniBatch)
-            local_obs = deepcopy(states)
-            # 处理local_obs中最后120维度改为0
-            for i in range(len(local_obs)):
-                local_obs[i][-120:] = 0
-                
+              
             # 转换为张量并移动到设备
             states = torch.tensor(np.array(states), dtype=torch.float32, device=self.device)
-            local_obs = torch.tensor(np.array(local_obs), dtype=torch.float32, device=self.device)
+            
             # 确保states是正确的2D张量 [batch_size, state_size]
             if states.dim() == 3 and states.size(1) == 1:
                 states = states.squeeze(1)  # [32, 1, 29] -> [32, 29]
-            if local_obs.dim() == 3 and local_obs.size(1) == 1:
-                local_obs = local_obs.squeeze(1)  # [32, 1, 29] -> [32, 29]
             
             actions = torch.tensor(actions, dtype=torch.long, device=self.device)
             rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
@@ -301,7 +346,6 @@ class TSDDQNetwork:
 
             # 计算当前Q值
             current_q_values = self.qNetwork(states)  # 应该是 [batch_size, action_size]
-            
             
             # 如果current_q_values是3维的，需要压缩多余的维度
             if current_q_values.dim() == 3 and current_q_values.size(1) == 1:
@@ -326,53 +370,191 @@ class TSDDQNetwork:
             # 计算损失
             # RL损失：主网络学习强化学习任务 loss_fn
             rl_loss = self.loss_fn(target_q_values, predict_q_values) 
-            
-            # 蒸馏损失：学生网络学习主网络在选择动作上的知识
-            student_q_values = self.sNetwork(local_obs)
-            distill_loss = self.loss_fn(current_q_values.detach(), student_q_values)
-            
-            # 先优化主网络（RL任务）
-            self.optimizer.zero_grad()
             rl_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.qNetwork.parameters(), 0.5)  
             self.optimizer.step()
             if self.scheduler is not None:
                 self.scheduler.step()
             lr = self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.alpha
-            # 再优化学生网络（蒸馏任务）
-            self.student_optimizer.zero_grad()
-            distill_loss.backward()
-            self.student_optimizer.step()
-
             # 记录损失
             earth.loss.append([rl_loss.item(), sat.env.now])
             earth.trains.append([sat.env.now])
-        
+            
+            if self.step > 24000:
+                # Make a device-local copy and zero the last 120 features without converting to numpy
+                # (converting a CUDA tensor to numpy causes: "can't convert cuda:0 device type tensor to numpy").
+                local_obs = states.clone()
+                # If states has a singleton second dimension (e.g., [B,1,S]), squeeze it first
+                if local_obs.dim() == 3 and local_obs.size(1) == 1:
+                    local_obs = local_obs.squeeze(1)  # [B,1,S] -> [B,S]
+                # Zero the last 120 dimensions in a GPU-safe, vectorized way
+                if local_obs.size(1) >= 120:
+                    local_obs[:, -120:] = 0
+                else:
+                    # defensive: zero what exists
+                    local_obs[:, -local_obs.size(1):] = 0
+                # 蒸馏损失：学生网络学习主网络在选择动作上的知识
+                student_q_values = self.sNetwork(local_obs)
+                
+                if self.distillationLossFun == 'KL':
+                    distill_loss = self.distillation_loss_fn(student_q_values, current_q_values.detach(), temperature=5.0)
+                elif self.distillationLossFun == 'KL_v2':
+                    distill_loss = self.distillation_loss_fn(student_q_values, current_q_values.detach(), temperature=5.0)
+                else:
+                    distill_loss = self.distillation_loss_fn(current_q_values.detach(), student_q_values)
+
+                # 先优化主网络（RL任务）
+                self.optimizer.zero_grad()
+
+                # 再优化学生网络（蒸馏任务）
+                self.student_optimizer.zero_grad()
+                distill_loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.sNetwork.parameters(), 0.5)  
+                self.student_optimizer.step()
+
             # SwanLab日志记录
-            if hasattr(self, 'swanlab_initialized') and self.swanlab_initialized:
-                info = {
-                    "RLloss": rl_loss.item(),
-                    "DistillLoss": distill_loss.item(),
-                    "learning_rate": lr,
-                    "predictQ": target_q_values.mean().item(),
-                    "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
-                    "simulation_time": sat.env.now
-                }
-                swanlab.log(info)
             
+                if hasattr(self, 'swanlab_initialized') and self.swanlab_initialized:
+                    info = {
+                        "RLloss": rl_loss.item(),
+                        "DistillLoss": distill_loss.item(),
+                        "learning_rate": lr,
+                        "predictQ": target_q_values.mean().item(),
+                        "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
+                        # "simulation_time": sat.env.now
+                    }
+                    swanlab.log(info)
             
-        return rl_loss.item()
+            else:
+                if hasattr(self, 'swanlab_initialized') and self.swanlab_initialized:
+                    info = {
+                        "RLloss": rl_loss.item(),
+                        "learning_rate": lr,
+                        "predictQ": target_q_values.mean().item(),
+                        "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
+                        # "simulation_time": sat.env.now
+                    }
+                    swanlab.log(info)
+            
+        return 
+
+
+def kl_distillation_loss(student_outputs, teacher_outputs, temperature):
+    """
+    计算KL散度损失，用于策略蒸馏。
+
+    loss_kl = \sum_{i = 1}^N softmax(\frac{Q^T}{t} \ln \frac{softmax(\frac{Q^T}{t})} {softmax(\frac{Q^S}{t})})
+
+    参数:
+    student_outputs: 学生网络的输出 (logits)
+    teacher_outputs: 教师网络的输出 (logits)
+    temperature: 温度参数，控制软化程度
+    
+    返回:
+    KL散度损失值
+    """
+    # 应用温度缩放
+    student_logits = student_outputs / 1
+    teacher_logits = teacher_outputs / temperature
+    
+    # 计算softmax概率分布
+    student_probs = nn.functional.softmax(student_logits, dim=1)  # softmax(Q^S/t)
+    teacher_probs = nn.functional.softmax(teacher_logits, dim=1)  # softmax(Q^T/t)
+    
+    # 根据公式计算KL散度: ∑ softmax(Q^T/t) * ln(softmax(Q^T/t) / softmax(Q^S/t))
+    # 等价于: ∑ teacher_probs * ln(teacher_probs / student_probs)
+    # 为了数值稳定性，使用 log(teacher_probs) - log(student_probs)
+    log_teacher_probs = torch.log(teacher_probs + 1e-8)  # 加小值避免log(0)
+    log_student_probs = torch.log(student_probs + 1e-8)
+    
+    # KL散度计算: teacher_probs * (log_teacher_probs - log_student_probs)
+    kl_loss = torch.sum(teacher_probs * (log_teacher_probs - log_student_probs), dim=1)
+    kl_loss = torch.mean(kl_loss) * (temperature ** 2)  # 温度平方缩放，返回标量
+    
+    return kl_loss
+
+def negative_log_likelihood_loss(student_outputs, teacher_outputs):
+    """
+    计算负对数似然损失，用于策略蒸馏。
+
+    loss_nll = - \sum_{i = 1}^N argmax(Q^T) \ln softmax(Q^S)
+
+    参数:
+    student_outputs: 学生网络的输出 (logits)
+    teacher_outputs: 教师网络的输出 (logits)
+
+    返回:
+    负对数似然损失值
+    """
+    # 计算教师网络的动作概率分布
+    teacher_probs = nn.functional.softmax(teacher_outputs, dim=1)
+    # 获取教师网络选择的动作索引
+    _, teacher_actions = torch.max(teacher_probs, dim=1)
+
+    # 计算学生网络的动作概率分布
+    student_log_probs = nn.functional.log_softmax(student_outputs, dim=1)
+
+    # 计算负对数似然损失
+    nll_loss = nn.NLLLoss()  # 默认 reduction='mean'，已经返回平均值
+    loss = nll_loss(student_log_probs, teacher_actions)  # 返回标量
+
+    return loss
+
+
+def kl_distillation_loss_v2(student_outputs, teacher_outputs, temperature):
+    """
+    计算双重KL散度损失，用于策略蒸馏。
+
+    loss_kl = \sum_{i = 1}^N softmax(\frac{Q^T}{t} \ln \frac{softmax(\frac{Q^T}{t})} {softmax(\frac{Q^S}{t})})
+
+    参数:
+    student_outputs: 学生网络的输出 (logits)
+    teacher_outputs: 教师网络的输出 (logits)
+    temperature: 温度参数，控制软化程度
+
+    返回:
+    KL散度损失值
+    """
+    kl_loss = kl_distillation_loss(student_outputs, teacher_outputs, temperature)
+    nll_loss = negative_log_likelihood_loss(student_outputs, teacher_outputs)
+    return nll_loss*0.5 + kl_loss*0.5
+
+
 
 # 定义Q网络结构（PyTorch版）
 class QNetwork(nn.Module):
-    def __init__(self, state_size, action_size):
+    def __init__(self, state_size, action_size, dropout_rate=0.2):
         super(QNetwork, self).__init__()
         self.layers = nn.Sequential(
-            nn.Linear(state_size, 128),
+            # 第一层：输入层到隐藏层
+            nn.Linear(state_size, 256),
             nn.ReLU(),
-            nn.Linear(128, 32),
+            nn.Dropout(dropout_rate),
+            
+            # 第二层：扩展特征表示
+            nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(32, action_size)
+            nn.Dropout(dropout_rate),
+            
+            # 第三层：特征压缩
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            
+            # 输出层
+            nn.Linear(64, action_size)
         )
+        
+        # 权重初始化
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        """Xavier初始化权重"""
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
         return self.layers(x)

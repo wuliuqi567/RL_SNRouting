@@ -231,7 +231,11 @@ class Satellite:
                 else:
                     nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
 
-            if nextHop != 0:
+            if nextHop == -1:
+                # exceed max hops, drop the block
+                dropBlocks.append(block)
+                return
+            elif nextHop != 0:
                 block.QPath.insert(len(block.QPath)-1 ,nextHop)
                 pathPlot = block.QPath.copy()
                 pathPlot.pop()
@@ -281,10 +285,11 @@ class Satellite:
                 if id == path[index + 1][0]:
                     ID = sat[1].ID
                     isIntra = True
-            for sat in self.interSats:
-                id = sat[1].ID
-                if id == path[index + 1][0]:
-                    ID = sat[1].ID
+            if not isIntra:
+                for sat in self.interSats:
+                    id = sat[1].ID
+                    if id == path[index + 1][0]:
+                        ID = sat[1].ID
 
             if ID is not None:
                 sendBuffer = None

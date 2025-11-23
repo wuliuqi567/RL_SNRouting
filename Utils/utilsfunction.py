@@ -1143,6 +1143,17 @@ def getDistanceRewardV5(sat, nextSat, w2):
     SLr = getSlantRange(sat, nextSat)
     return w2*SLr/1000000
 
+
+def rewardBasedLyapunovOptimization(queueLengths, w3):
+    '''
+    Given the queue lengths of the satellite, this function will return the Lyapunov-based reward.
+    With 125 packets, the reward will be -0.015 (with w3 = 0.000001)
+    '''
+    sumQueues = 0
+    for qLen in queueLengths.values():
+        sumQueues += qLen**2
+    return -w3*sumQueues
+
 def getQueueReward(queueTime, w1):
     '''
     Given the queue time in seconds, this function will return the queue reward.

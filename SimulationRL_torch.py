@@ -29,6 +29,8 @@ class hyperparam:
         '''
         self.alpha      = alpha
         self.lr       = learningRate
+        self.distillationLR = distillationLR
+        self.distillationLossFun = distillationLossFun
         self.gamma      = gamma
         self.epsilon    = epsilon
         self.ArriveR    = ArriveReward
@@ -77,6 +79,8 @@ def saveHyperparams(outputPath, inputParams, hyperparams):
                 'Test length: ' + str(inputParams['Test length'][0]),
                 'decayRate: ' + str(hyperparams.decayRate),
                 'lr: ' + str(hyperparams.alpha),
+                'distillationLR: ' + str(hyperparams.distillationLR),
+                'distillationLossFun: ' + str(hyperparams.distillationLossFun),
                 'nepoch: ' + str(hyperparams.train_epoch),
                 'nTrain: ' + str(hyperparams.nTrain),
                 'Update freq: ' + str(hyperparams.updateF),
@@ -412,8 +416,8 @@ def RunSimulation(GTs, inputPath, outputPath, populationData, radioKM):
         if not onlinePhase:
             plotQueues(earth1.queues, outputPath, GTnumber)
 
-        print('Plotting link congestion figures...')
-        plotCongestionMap(earth1, np.asarray(blocks), outputPath + '/Congestion_Test/', GTnumber, plot_separately=plotAllCon)
+        # print('Plotting link congestion figures...')
+        # plotCongestionMap(earth1, np.asarray(blocks), outputPath + '/Congestion_Test/', GTnumber, plot_separately=plotAllCon)
 
         print(f"number of gateways: {GTnumber}")
         print('Path:')
@@ -490,17 +494,22 @@ if __name__ == '__main__':
     import os
 
     current_dir = os.getcwd()
-
-    # nnpath          = f'./pre_trained_NNs/qNetwork_8GTs.h5'
-    filetime_ymd = datetime.now().strftime("%Y-%m-%d")
-    filetime_hms = datetime.now().strftime("%H-%M-%S")
-    data_inputrl = pd.read_csv("inputRL.csv")
-    constellation = data_inputrl['Constellation'][0]
-    sim_time = data_inputrl['Test length'][0]
-    outputPath      = current_dir + '/ResultsV2/{}/{}/{}_{}_[{}]s_lr_{}_GTs_{}/'.format(pathing, filetime_ymd, filetime_hms, constellation, sim_time, alpha_dnn, GTs)
-    populationMap   = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
-    os.makedirs(outputPath, exist_ok=True) 
-    sys.stdout = Logger(outputPath + 'logfile.log')
+    if Train:
+        # nnpath          = f'./pre_trained_NNs/qNetwork_8GTs.h5'
+        filetime_ymd = datetime.now().strftime("%Y-%m-%d")
+        filetime_hms = datetime.now().strftime("%H-%M-%S")
+        data_inputrl = pd.read_csv("inputRL.csv")
+        constellation = data_inputrl['Constellation'][0]
+        sim_time = data_inputrl['Test length'][0]
+        outputPath      = current_dir + '/ResultsV2/{}/{}/{}_{}_[{}]s_lr_{}_GTs_{}/'.format(pathing, filetime_ymd, filetime_hms, constellation, sim_time, alpha_dnn, GTs)
+        populationMap   = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
+        os.makedirs(outputPath, exist_ok=True) 
+        sys.stdout = Logger(outputPath + 'logfile.log')
+    else:
+        outputPath      = current_dir + '/ResultsV2/Policy Distillation/2025-10-24/15-16-08_Starlink_[3.0]s_lr_0.0001_GTs_[2] copy 2/'
+        populationMap   = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
+        print('outputPath: ' + outputPath)
+        sys.stdout = Logger(outputPath + 'logfile.log')
 
     RunSimulation(GTs, './', outputPath, populationMap, radioKM=rKM)
     # cProfile.run("RunSimulation(GTs, './', outputPath, populationMap, radioKM=rKM)")

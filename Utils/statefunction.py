@@ -390,3 +390,41 @@ def obtain_3rd_order_neighbor_info(block, sat, g, earth):
     adjacent_info = np.concatenate([adjacent_info] + [get_sat_info(neighbor, sat) for neighbor in third_order_neighbors], axis=1)
     # total 1 + 144 + 2 + 2 = 149 dimension, 第一阶的邻居信息共 1+2+2+4*6 =29维，二三阶的邻居信息共 8*6 + 12*6 = 120维
     return np.concatenate((last_satellite_info, cur_pos.reshape(1, -1), dest_pos.reshape(1, -1), adjacent_info), axis=1)
+
+def obtain_1rd_neighbor_info(block, sat, g, earth):
+    """
+    Obtain 1rd order neighbor information for the given satellite links.
+    以当前节点为中心的一阶邻居信息，
+    拼接方式；上一个跳的信息，up link的上下左右队列信息，down link的上下左右队列信息，right link的上下左右队列信息，left link的上下左右队列信息
+    """
+    
+    satDest = block.destination.linkedSat[1]
+    if satDest is None:
+        print(f'{block.destination} has no linked satellite :(')
+        return None
+    # 1 dimension
+    last_satellite_info = np.array(get_last_satellite(block, sat)).reshape(1, -1)
+    
+    # Current coordinates
+    current_lat = sat.latitude
+    current_lon = sat.longitude
+    # 2 dimension
+    cur_pos = np.array([
+        get_absolute_position(current_lat, latBias, coordGran),
+        get_absolute_position(current_lon, lonBias, coordGran),
+    ])
+    # 3 dimension
+    # Destination's differential coordinates
+    dest_pos = np.array([
+        get_relative_position(satDest, current_lat, is_lat=True),
+        get_relative_position(satDest, current_lon, is_lat=False)
+    ])
+    first_order_neighbors = set()
+    linked_sats = getLinkedSats(sat, g, earth)
+    for neighbor in linked_sats.values():
+        if neighbor is not None:
+            first_order_neighbors.add(neighbor)
+    adjacent_info = np.concatenate([get_sat_info(neighbor, sat) for neighbor in first_order_neighbors], axis=1)
+    zero_padding = np.zeros((1, 120))  # 修正为2D数组以匹配concatenate
+    # total 1 + 24 + 2 + 2 + 120 = 149 dimension, 第一阶的邻居信息共 4*6 =24维，补充120维零填充
+    return np.concatenate((last_satellite_info, cur_pos.reshape(1, -1), dest_pos.reshape(1, -1), adjacent_info, zero_padding), axis=1)

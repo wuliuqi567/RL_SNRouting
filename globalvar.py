@@ -7,5 +7,5 @@ upGSLRates          = []
 downGSLRates        = []
 interRates          = []
 intraRate           = []
-
+dropBlocks         = []
 

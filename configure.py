@@ -11,8 +11,11 @@ movementTime= 0.5       # Every movementTime seconds, the satellites positions a
                         # If do not want the constellation to move, set this parameter to a bigger number than the simulation time
 ndeltas     = 5805.44/20 #1 Movement speedup factor. Every movementTime sats will move movementTime*ndeltas space. If bigger, will make the rotation distance bigger
 
+# 从训练改为测试需要修改 Train = False，explore = False
+
 Train       = True      # Global for all scenarios with different number of GTs. if set to false, the model will not train any of them
-explore     = True      # If True, makes random actions eventually, if false only exploitation
+explore     = True     # If True, makes random actions eventually, if false only exploitation
+importSnetwork = False  # imports a pre-trained neural network from a certain path
 importQVals = False     # imports either QTables or NN from a certain path
 onlinePhase = False     # when set to true, each satellite becomes a different agent. Recommended using this with importQVals=True and explore=False
 if onlinePhase:         # Just in case
@@ -27,7 +30,7 @@ w4          = 5         # Normalization for the distance reward, for the travele
 
 gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
 
-GTs = [2]               # number of gateways to be tested
+GTs = [4]               # number of gateways to be tested
 # Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
 # GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
 
@@ -55,7 +58,7 @@ min_rate= 10e3  # Minimum rate in kbps
 # Uplink Parameters
 balancedFlow= False         # if set to true all the generated traffic at each GT is equal
 totalFlow   = 2*1000000000  # Total average flow per GT when the balanced traffc option is enabled. Malaga has 3*, LA has 3*, Nuuk/500
-avUserLoad  = 8593 * 8      # average traffic usage per second in bits
+avUserLoad  = 15593 * 8      # average traffic usage per second in bits
 
 # Block
 BLOCK_SIZE   = 64800
@@ -83,12 +86,14 @@ notAvail    = 0             # this value is set in the state space when the sate
 ddqn        = True      # Activates DDQN, where now there are two DNNs, a target-network and a q-network
 # importQVals = False     # imports either QTables or NN from a certain path
 plotPath    = False     # plots the map with the path after every decision
-alpha       = 0.00005      # learning rate for Q-Tables
+alpha       = 0.0001      # learning rate for Q-Tables
 alpha_dnn   = alpha      # learning rate for the deep neural networks
 # gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
 epsilon     = 0.1       # exploration factor for Q-Learning ONLY
 tau         = 0.01       # rate of copying the weights from the Q-Network to the target network
 learningRate= alpha     # Default learning rate for Adam optimizer
+distillationLR = 0.00005 # Learning rate for the student optimizer in policy distillation
+distillationLossFun = 'KL_v2' # Loss function for policy distillation. Options: 'MSE', 'Huber' and 'KL', 'KLv2'
 plotDeliver = False     # create pictures of the path every 1/10 times a data block gets its destination
 # plotSatID   = False     # If True, plots the ID of each satellite
 GridSize    = 8         # Earth divided in GridSize rows for the grid. Used to be 15
@@ -122,12 +127,12 @@ distanceRew = 4          # 1: Distance reward normalized to total distance.
 MAX_EPSILON = 0.99      # Maximum value that the exploration parameter can have
 MIN_EPSILON = 0.001     # Minimum value that the exploration parameter can have
 LAMBDA      = 0.0005   # This value is used to decay the epsilon in the deep learning implementation
-decayRate   = 70        # sets the epsilon decay in the deep learning implementatio. If higher, the decay rate is slower. If lower, the decay is faster
+decayRate   = 30       # if 5s  set 90# sets the epsilon decay in the deep learning implementatio. If higher, the decay rate is slower. If lower, the decay is faster
 Clipnorm    = 1         # Maximum value to the nom of the gradients. Prevents the gradients of the model parameters with respect to the loss function becoming too large
 hardUpdate  = 1         # if up, the Q-network weights are copied inside the target network every updateF iterations. if down, this is done gradually
-updateF     = 2000      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
-batchSize   = 32        # batchSize samples are taken from bufferSize samples to train the network
-bufferSize  = 30000        # bufferSize samples are used to train the network
+updateF     = 2800      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
+batchSize   = 128        # batchSize samples are taken from bufferSize samples to train the network
+bufferSize  = 100000        # bufferSize samples are used to train the network
 train_epoch = 4
 # Stop Loss
 # Train       = True      # Global for all scenarios with different number of GTs. if set to false, the model will not train any of them

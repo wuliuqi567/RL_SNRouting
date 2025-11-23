@@ -3,7 +3,7 @@ import time
 import socket
 
 # Initialize SwanLab
-def init_swanlab(hyperparams=None, project_name="Satellite_Routing", 
+def init_swanlab(hyperparams=None, project_name="Satellite_Routingv5", 
                      entity=None, log_dir="./logs"):
         """
         初始化SwanLab日志记录
