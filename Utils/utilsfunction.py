@@ -1175,6 +1175,26 @@ def getBiasedLongitude(sat):
     except AttributeError as e:
         # print(f"getBiasedLongitude Caught an exception: {e}")
         return notAvail
+    
+def getBiasedLatitude_v2(sat):
+    try:
+        # 归一化到 [-1, 1]
+        return math.degrees(sat.latitude) / 90.0
+    except AttributeError as e:
+        return notAvail
+
+def getBiasedLongitude_v2(sat):
+    try:
+        # 归一化到 [-1, 1]
+        return math.degrees(sat.longitude) / 180.0
+    except AttributeError as e:
+        return notAvail
+    
+def getNodeNormalizedPosition(node):
+    '''
+    Given a satellite, this function will return its normalized position in the grid
+    '''
+    return (getBiasedLatitude_v2(node), getBiasedLongitude_v2(node))
 
 def getDeepSatScore(queueLength):
     # return 1 if queueLength > infQueue else (int(np.floor(queueVals*np.log10(queueLength + 1)/np.log10(infQueue))))/queueVals

@@ -1,3 +1,4 @@
+import logging
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -15,6 +16,134 @@ from Utils.statefunction import *
 import swanlab
 from copy import deepcopy
 from .kits import *
+import argparse
+from graphUtils.gutils import set_seeds, reorginize_self_loop_edges
+from GNNmodel.utils import save_config, save_model, remove_models
+from GNNmodel.MAGNA_model import MAGNA
+
+def parse_args(args=None):
+    parser = argparse.ArgumentParser(description='GAT')
+    parser.add_argument('--cuda', default=True, action='store_true', help='use GPU')
+    parser.add_argument('--do_train', default=True, action='store_true')
+    parser.add_argument("--dataset", type=str, default='cora')
+    parser.add_argument("--epochs", type=int, default=600,
+                        help="number of training epochs")
+    parser.add_argument("--num_heads", type=int, default=8,
+                        help="number of hidden attention heads")
+    parser.add_argument("--num_layers", type=int, default=2,
+                        help="number of hidden layers")
+    parser.add_argument("--top_k", type=int, default=5,
+                        help="top k selection")
+    parser.add_argument("--project_dim", type=int, default=-1,
+                        help="projection dimension")
+    parser.add_argument("--num_hidden", type=int, default=512,
+                        help="number of hidden units")
+    parser.add_argument("--residual", action="store_true", default=True,
+                        help="use residual connection")
+    parser.add_argument("--in_drop", type=float, default=.25,
+                        help="input feature dropout")
+    parser.add_argument("--attn_drop", type=float, default=0.5,
+                        help="attention dropout")
+    parser.add_argument("--edge_drop", type=float, default=.1,
+                        help="edge dropout")
+    parser.add_argument("--clip", type=float, default=1.0, help="grad_clip")
+    parser.add_argument("--alpha", type=float, default=.15,
+                        help="alpha")
+    parser.add_argument("--hop_num", type=int, default=4,
+                        help="hop number")
+    parser.add_argument("--p_norm", type=int, default=0.0,
+                        help="p_norm")
+    parser.add_argument("--layer_norm", type=bool, default=True)
+    parser.add_argument("--feed_forward", type=bool, default=True)
+    parser.add_argument("--topk_type", type=str, default='local',
+                        help="topk type")
+    parser.add_argument("--patience", type=int, default=300, help="patience")
+    parser.add_argument('-save', '--save_path', default='../models/', type=str)
+    parser.add_argument("--lr", type=float, default=0.0002,
+                        help="learning rate")
+    parser.add_argument("--lr_reduce_factor", type=float, default=0.5, help="Please give a value for lr_reduce_factor")
+    parser.add_argument("--lr_schedule_patience", type=float, default=25, help="Please give a value for lr_reduce_patience")
+    parser.add_argument('--weight_decay', type=float, default=1e-5,
+                        help="weight decay")
+    parser.add_argument('--negative_slope', type=float, default=0.2,
+                        help="the negative slope of leaky relu")
+    parser.add_argument('--self_loop', default=1, type=int, help='whether self-loop')
+    parser.add_argument('--early-stop', action='store_true', default=False,
+                        help="indicates whether to use early stop or not")
+    parser.add_argument('--fastmode', action="store_true", default=False,
+                        help="skip re-evaluate the validation set")
+    parser.add_argument('--head_tail_shared', type=int, default=1,
+                        help="random seed")
+    parser.add_argument('--seed', type=int, default=2020,
+                        help="random seed")
+    args = parser.parse_args(args)
+    return args
+
+def accuracy(logits, labels):
+    _, indices = torch.max(logits, dim=1)
+    correct = torch.sum(indices == labels)
+    return correct.item() * 1.0 / len(labels)
+
+
+def evaluate(model, features, labels, mask):
+    model.eval()
+    with torch.no_grad():
+        full_logits = model(features)
+        logits = full_logits[mask]
+        labels = labels[mask]
+        return accuracy(logits, labels), full_logits
+
+def set_logger(args):
+    '''
+    Write logs to checkpoint and console
+    '''
+
+    if args.do_train:
+        log_file = os.path.join(args.save_path, 'train.log')
+    else:
+        log_file = os.path.join(args.save_path, 'test.log')
+
+    logging.basicConfig(
+        format='%(asctime)s %(levelname)-8s %(message)s',
+        level=logging.INFO,
+        datefmt='%Y-%m-%d %H:%M:%S',
+        filename=log_file,
+        filemode='w'
+    )
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+    console.setFormatter(formatter)
+    logging.getLogger('').addHandler(console)
+
+def preprocess(args):
+    random_seed = args.seed
+    set_seeds(random_seed)
+    if args.save_path and not os.path.exists(args.save_path):
+        os.makedirs(args.save_path)
+    set_logger(args)
+    logging.info("Model information...")
+    for key, value in vars(args).items():
+        logging.info('\t{} = {}'.format(key, value))
+
+    model_folder_name = args2foldername(args)
+    model_save_path = os.path.join(args.save_path, model_folder_name)
+    if not os.path.exists(model_save_path):
+        os.makedirs(model_save_path)
+    save_config(args, model_save_path)
+    logging.info('Model saving path: {}'.format(model_save_path))
+    return model_save_path
+
+def args2foldername(args):
+    folder_name = args.dataset + 'lr_' + str(round(args.lr, 5)) + \
+                 "lyer_" + str(args.num_layers) + 'hs_' + str(args.num_heads) + \
+                 'ho_' + str(args.hop_num) + 'hi_' + str(args.num_hidden) + 'tk_' + str(args.top_k) + \
+                 'pd_' + str(args.project_dim) + 'ind_' + str(round(args.in_drop, 4)) + \
+                 'att_' + str(round(args.attn_drop, 4)) + 'ed_' + str(round(args.edge_drop, 4)) + 'alpha_' + \
+                 str(round(args.alpha, 3)) + 'decay_' + str(round(args.weight_decay, 6))
+    return folder_name
+
+
 
 class TSDDQNetwork:
     def __init__(self, NGT, hyperparams, earth, sat_ID=None):
@@ -23,15 +152,10 @@ class TSDDQNetwork:
             self.device = torch.device('cuda')
         else:
             self.device = torch.device('cpu')
-            
-        if print_device_info:
-            print(f"TSDDQNetwork using device: {self.device}")
-            if torch.cuda.is_available():
-                print(f"GPU available: {torch.cuda.get_device_name()}")
-                if not use_gpu:
-                    print("Note: GPU is available but use_gpu is set to False in configure.py")
-            else:
-                print("GPU not available, using CPU")
+        
+        args = parse_args()
+        self.model_save_path = preprocess(args)
+
             
         self.actions = ('U', 'D', 'R', 'L')
         self.third_adj = hyperparams.third_adj    # 假设hyperparams包含该属性
@@ -72,8 +196,35 @@ class TSDDQNetwork:
         self.epsilon = []
         self.experienceReplay = ExperienceReplay(self.bufferS)  # 假设ExperienceReplay已适配PyTorch
 
+        num_feats = self.stateSize
+        n_classes = self.actionSize
+        heads = 3
+    
+
         # 初始化网络
         if Train:
+            self.qNetwork = MAGNA(
+                num_layers=args.num_layers,
+                input_dim=num_feats,
+                project_dim=args.project_dim,
+                hidden_dim=args.num_hidden,
+                num_classes=n_classes,
+                heads=heads,
+                feat_drop=args.in_drop,
+                attn_drop=args.attn_drop,
+                alpha=args.alpha,
+                hop_num=args.hop_num,
+                top_k=args.top_k,
+                topk_type=args.topk_type,
+                edge_drop=args.edge_drop,
+                layer_norm=args.layer_norm,
+                feed_forward=args.feed_forward,
+                self_loop_number=self_loop_number,
+                self_loop=(args.self_loop==1),
+                head_tail_shared=(args.head_tail_shared == 1),
+                negative_slope=args.negative_slope)
+
+
             self.qNetwork = QNetwork(self.stateSize, self.actionSize).to(self.device)
             if self.ddqn:
                 self.qTarget = QNetwork(self.stateSize, self.actionSize).to(self.device)

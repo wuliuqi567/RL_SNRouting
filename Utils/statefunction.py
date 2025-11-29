@@ -1,6 +1,6 @@
 from Utils.utilsfunction import *
-
-
+from dgl import from_networkx
+import torch
 # for QLearningAgent
 def getLinkedSats(satA, g, earth):
     '''
@@ -186,6 +186,33 @@ def getDeepStateReduced(block, sat, linkedSats):
                     getBiasedLatitude(satDest),                                 # Destination Latitude
                     getBiasedLongitude(satDest)]).reshape(1,-1) 
 
+def getLinkDataRate(sat):
+    # Returns the Shannon Rate of the link in the specified direction
+    linkedSats = getDeepLinkedSats(sat, None, None)
+    
+    ISLDataRate = {"U": None, "D": None, "R": None, "L": None}
+    ISLDistance = {"U": None, "D": None, "R": None, "L": None}
+    # sat.intraSats is a list: [(distance, sat2, dataRate), ...]
+    for edge in sat.intraSats:
+        distance = edge[0]
+        neighbor_sat = edge[1]
+        dataRate = edge[2]
+        for direction, linked_sat in linkedSats.items():
+            if neighbor_sat.ID == linked_sat.ID:
+                ISLDataRate[direction] = dataRate
+                ISLDistance[direction] = distance
+
+    for edge in sat.interSats:
+        distance = edge[0]
+        neighbor_sat = edge[1]
+        dataRate = edge[2]
+        for direction, linked_sat in linkedSats.items():
+            if neighbor_sat.ID == linked_sat.ID:
+                ISLDataRate[direction] = dataRate
+                ISLDistance[direction] = distance
+    
+    return ISLDataRate, ISLDistance
+            
 
 def normalize_angle_diff(angle_diff):
     # Ensure the angle difference is within [-180, 180]
@@ -353,6 +380,51 @@ def get_sat_info(sat, center_sat):
     ]
     return np.array(state).reshape(1, -1)
 
+def get_sat_info_v2(cur_sat, cen_sat, dest_sat):
+    """
+    Obtain information about the satellite's queue lengths and positions.
+    """
+    pos_states = getPositionState(cur_sat, cen_sat, dest_sat)
+    queues_states = getQueuesStates(cur_sat)
+    return np.concatenate((pos_states, queues_states), axis=1)
+
+def getPositionState(cur_sat, cen_sat, dest_sat):
+    """
+    Obtain absolute position state for the given satellite.
+    """
+    # 1. 绝对坐标
+    abs_pos = np.array([
+        get_absolute_position(cur_sat.latitude, latBias, coordGran),
+        get_absolute_position(cur_sat.longitude, lonBias, coordGran),
+    ]).reshape(1, -1)
+
+    # 2. 当前卫星相对于中心节点的位移
+    cur_pos = np.array([
+        get_relative_position(cen_sat, cur_sat.latitude, is_lat=True),
+        get_relative_position(cen_sat, cur_sat.longitude, is_lat=False)
+    ]).reshape(1, -1)
+
+    # 3. 相对于目的地面站连接的卫星的位移
+    dest_pos = np.array([
+        get_relative_position(dest_sat, cur_sat.latitude, is_lat=True),
+        get_relative_position(dest_sat, cur_sat.longitude, is_lat=False)
+    ]).reshape(1, -1)
+    return np.concatenate((abs_pos, cur_pos, dest_pos), axis=1)
+
+def getQueuesStates(sat):
+    """
+    Obtain queue states for the given satellite.
+    """
+    queues = getQueues(sat, DDQN=True)
+    state = [
+        getDeepSatScore(queues['U']),
+        getDeepSatScore(queues['D']),
+        getDeepSatScore(queues['R']),
+        getDeepSatScore(queues['L']),
+    ]
+    return np.array(state).reshape(1, -1)
+
+
 def obtain_3rd_order_neighbor_info(block, sat, g, earth):
     """
     Obtain 3rd order neighbor information for the given satellite links.
@@ -428,3 +500,94 @@ def obtain_1rd_neighbor_info(block, sat, g, earth):
     zero_padding = np.zeros((1, 120))  # 修正为2D数组以匹配concatenate
     # total 1 + 24 + 2 + 2 + 120 = 149 dimension, 第一阶的邻居信息共 4*6 =24维，补充120维零填充
     return np.concatenate((last_satellite_info, cur_pos.reshape(1, -1), dest_pos.reshape(1, -1), adjacent_info, zero_padding), axis=1)
+
+# 基于当前卫星在图中的位置，从nx图中获取子图satsub，然后构建一个dgl图dglsatsub，
+# 
+# 然后获取每个节点的队列位置属性添加到图dglsatsub中，最后再获取节点和边的状态。
+
+def get_subgraph_state(block, sat, g, earth):
+    """
+    Generates the subgraph state for the current satellite using an n-order ego graph.
+
+    This function constructs a local subgraph centered at the current satellite, converts it
+    to a DGL graph, and populates it with node and edge features. It handles the removal
+    of ground station nodes (source and destination) from the graph to focus on satellite
+    topology.
+
+    Args:
+        block: The data block being routed, containing source and destination information.
+        sat: The current satellite object where the decision is being made.
+        g (networkx.Graph): The global network topology graph.
+        earth: The simulation environment object containing all network entities.
+
+    Returns:
+        dgl.DGLGraph: A DGL graph representing the local subgraph.
+            - ndata['feat']: Node features tensor of shape (N, feature_dim).
+            - edata['weight']: Edge features tensor of shape (E, 2), containing normalized
+              slant range and data rate.
+    """
+    # 获取n阶子图
+
+    n_order = 4
+    n_order_graph = nx.ego_graph(g, sat.ID, radius=n_order, center=True, undirected=True)
+
+    satDest = block.destination.linkedSat[1]
+    srcGs = block.source
+    destGS = block.destination
+    if destGS.name in n_order_graph.nodes():
+        # node_list.remove(destGS.name)
+        n_order_graph.remove_node(destGS.name)
+
+    if srcGs.name in n_order_graph.nodes():
+        # node_list.remove(srcGs)
+        n_order_graph.remove_node(srcGs.name)
+
+    node_list = list(n_order_graph.nodes())
+
+    dgl_g = from_networkx(n_order_graph) # , edge_attrs=['slant_range', 'dataRateOG'] 无相图不能直接提取边属性，需要手动赋值
+    src, dst = dgl_g.edges()
+    
+    weights = []
+
+    for src_idx, dst_idx in zip(src, dst):
+        slant_range = n_order_graph.edges[node_list[src_idx.item()], node_list[dst_idx.item()]]['slant_range']
+        dataRate = n_order_graph.edges[node_list[src_idx.item()], node_list[dst_idx.item()]]['dataRateOG']
+        weights.append([slant_range, dataRate])
+        
+    # 将weights特征对应归一化
+    weights = np.array(weights)
+    if weights.size > 0:
+        slant_ranges = weights[:, 0]
+        data_rates = weights[:, 1]
+
+        # 归一化处理
+        if slant_ranges.max() != slant_ranges.min():
+            slant_ranges_norm = (slant_ranges - slant_ranges.min()) / (slant_ranges.max() - slant_ranges.min())
+        else:
+            slant_ranges_norm = np.zeros_like(slant_ranges)  # 如果所有值相同，归一化为0
+
+        if data_rates.max() != data_rates.min():
+            data_rates_norm = (data_rates - data_rates.min()) / (data_rates.max() - data_rates.min())
+        else:
+            data_rates_norm = np.zeros_like(data_rates)  # 如果所有值相同，归一化为0
+
+        # 更新边特征
+        dgl_g.edata['weight'] = torch.tensor(np.column_stack((slant_ranges_norm, data_rates_norm)), dtype=torch.float32)
+    else:
+        dgl_g.edata['weight'] = torch.zeros((0, 2), dtype=torch.float32)
+    
+    # 收集所有节点的特征
+    features = []
+    # DGL节点ID是连续的整数 0, 1, ... N-1
+    for nodeId in range(dgl_g.num_nodes()):
+        origin_nodeid = node_list[nodeId] # 映射回原始ID
+        sat_node = findByID(earth, origin_nodeid)
+        node_data = get_sat_info_v2(sat_node, sat, satDest)
+        features.append(node_data)
+
+    # 一次性赋值特征
+    if features:
+        # np.vstack 将列表堆叠成 (N, D)
+        dgl_g.ndata['feat'] = torch.tensor(np.vstack(features), dtype=torch.float32)
+
+    return dgl_g
