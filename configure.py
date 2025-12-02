@@ -1,40 +1,47 @@
+# =============================================================================
+# 1. Simulation & Pathing Configuration
+# =============================================================================
 # HOT PARAMS - This parameters should be revised before every simulation
 pathings    = ['hop', 'dataRate', 'dataRateOG', 'slant_range', 'Q-Learning', 'Deep Q-Learning', 'Policy Distillation', 'GNNPD']
 pathing     = pathings[7]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
 
+GTs = [4]               # number of gateways to be tested
+# Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
+# GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
+
+CurrentGTnumber = -1    # Number of active gateways. This number will be updated every time a gateway is added. In the simulation it will iterate the GTs list
+
+# =============================================================================
+# 2. Visualization & Logging
+# =============================================================================
 FL_Test     = True     # If True, it plots the model divergence the model divergence between agents
 plotSatID   = True      # If True, plots the ID of each satellite
 plotAllThro = True      # If True, it plots throughput plots for each single path between gateways. If False, it plots a single figure for overall Throughput
 plotAllCon  = True      # If True, it plots congestion maps for each single path between gateways. If False, it plots a single figure for overall congestion
+plotPath    = False     # plots the map with the path after every decision
+plotDeliver = False     # create pictures of the path every 1/10 times a data block gets its destination
+winSize     = 20        # window size for the representation in the plots
+markerSize  = 50        # Size of the markers in the plots
 
-movementTime= 0.5       # Every movementTime seconds, the satellites positions are updated and the graph is built again
-                        # If do not want the constellation to move, set this parameter to a bigger number than the simulation time
-ndeltas     = 5805.44/20 #1 Movement speedup factor. Every movementTime sats will move movementTime*ndeltas space. If bigger, will make the rotation distance bigger
-
+# =============================================================================
+# 3. Training & Execution Mode
+# =============================================================================
 # 从训练改为测试需要修改 Train = False，explore = False
-
 Train       = True      # Global for all scenarios with different number of GTs. if set to false, the model will not train any of them
 explore     = True     # If True, makes random actions eventually, if false only exploitation
 importSnetwork = False  # imports a pre-trained neural network from a certain path
 importQVals = False     # imports either QTables or NN from a certain path
 onlinePhase = False     # when set to true, each satellite becomes a different agent. Recommended using this with importQVals=True and explore=False
+
 if onlinePhase:         # Just in case
     explore     = False
     importQVals = True
 else:
     FL_Test = False
 
-w1          = 20        # rewards the getting to empty queues
-w2          = 20        # rewards getting closes phisycally   
-w4          = 5         # Normalization for the distance reward, for the traveled distance factor 
-
-gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
-
-GTs = [2]               # number of gateways to be tested
-# Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
-# GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
-
-# Physical constants
+# =============================================================================
+# 4. Physical Constants
+# =============================================================================
 rKM = 500               # radio in km of the coverage of each gateway
 Re  = 6378e3            # Radius of the earth [m]
 G   = 6.67259e-11       # Universal gravitational constant [m^3/kg s^2]
@@ -44,6 +51,9 @@ Vc  = 299792458         # Speed of light [m/s]
 k   = 1.38e-23          # Boltzmann's constant
 eff = 0.55              # Efficiency of the parabolic antenna
 
+# =============================================================================
+# 5. Link & Traffic Parameters
+# =============================================================================
 # Downlink parameters
 f       = 20e9  # Carrier frequency GEO to ground (Hz)
 B       = 500e6 # Maximum bandwidth
@@ -63,18 +73,24 @@ avUserLoad  = 15593 * 8      # average traffic usage per second in bits
 # Block
 BLOCK_SIZE   = 64800
 
-# Movement and structure
-# movementTime= 0.05      # Every movementTime seconds, the satellites positions are updated and the graph is built again
-#                         # If do not want the constellation to move, set this parameter to a bigger number than the simulation time
-# ndeltas     = 5805.44/20#1 Movement speedup factor. This number will multiply deltaT. If bigger, will make the rotation distance bigger
+# =============================================================================
+# 6. Movement & Constellation
+# =============================================================================
+movementTime= 0.5       # Every movementTime seconds, the satellites positions are updated and the graph is built again
+                        # If do not want the constellation to move, set this parameter to a bigger number than the simulation time
+ndeltas     = 5805.44/20 #1 Movement speedup factor. Every movementTime sats will move movementTime*ndeltas space. If bigger, will make the rotation distance bigger
+
 saveISLs    = True     # save ISLs map
 const_moved = False     # Movement flag. If up, it means it has moved
 matching    = 'Positive_Grid'  # ['Markovian', 'Greedy', 'Positive_Grid']
 minElAngle  = 30        # For satellites. Value is taken from NGSO constellation design chapter.
 mixLocs     = False     # If true, every time we make a new simulation the locations are going to change their order of selection
 rotateFirst = False     # If True, the constellation starts rotated by 1 movement defined by ndeltas
+GridSize    = 8         # Earth divided in GridSize rows for the grid. Used to be 15
 
-# State pre-processing
+# =============================================================================
+# 7. State Representation
+# =============================================================================
 coordGran   = 20            # Granularity of the coordinates that will be the input of the DNN: (Lat/coordGran, Lon/coordGran)
 diff        = True          # If up, the state space gives no coordinates about the neighbor and destination positions but the difference with respect to the current positions
 diff_lastHop= True          # If up, this state is the same as diff, but it includes the last hop where the block was in order to avoid loops
@@ -82,38 +98,18 @@ reducedState= False         # if set to true the DNN will receive as input only 
 third_adj    = True          # If up, the state space includes the 3rd order neighbors information
 n_order_adj = 4   
 notAvail    = 0             # this value is set in the state space when the satellite neighbour is not available
-
-# Learning Hyperparameters
-ddqn        = True      # Activates DDQN, where now there are two DNNs, a target-network and a q-network
-# importQVals = False     # imports either QTables or NN from a certain path
-plotPath    = False     # plots the map with the path after every decision
-alpha       = 0.0002      # learning rate for Q-Tables
-alpha_dnn   = alpha      # learning rate for the deep neural networks
-# gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
-epsilon     = 0.1       # exploration factor for Q-Learning ONLY
-tau         = 0.01       # rate of copying the weights from the Q-Network to the target network
-learningRate= alpha     # Default learning rate for Adam optimizer
-distillationLR = 0.00005 # Learning rate for the student optimizer in policy distillation
-distillationLossFun = 'KL_v2' # Loss function for policy distillation. Options: 'MSE', 'Huber' and 'KL', 'KLv2'
-plotDeliver = False     # create pictures of the path every 1/10 times a data block gets its destination
-# plotSatID   = False     # If True, plots the ID of each satellite
-GridSize    = 8         # Earth divided in GridSize rows for the grid. Used to be 15
-winSize     = 20        # window size for the representation in the plots
-markerSize  = 50        # Size of the markers in the plots
-nTrain      = 120         # The DNN will train every nTrain steps
-noPingPong  = True      # when a neighbour is the destination satellite, send there directly without going through the dnn (Change policy)
-
-# Queues & State
 infQueue    = 5000      # Upper boundary from where a queue is considered as infinite when obserbing the state
 queueVals   = 10        # Values that the observed Queue can have, being 0 the best (Queue of 0) and max the worst (Huge queue or inexistent link).
 latBias     = 90        # This value is added to the latitude of each position in the state space. This can be done to avoid negative numbers
 lonBias     = 180       # Same but with longitude
 
-# rewards
+# =============================================================================
+# 8. Rewards & Penalties
+# =============================================================================
+w1          = 20        # rewards the getting to empty queues
+w2          = 20        # rewards getting closes phisycally   
+w4          = 5         # Normalization for the distance reward, for the traveled distance factor 
 ArriveReward= 50        # Reward given to the system in case it sends the data block to the satellite linked to the destination gateway
-# w1          = 20        # rewards the getting to empty queues
-# w2          = 20        # rewards getting closes phisycally   
-# w4          = 5         # Normalization for the distance reward, for the traveled distance factor  
 againPenalty= -10       # Penalty if the satellite sends the block to a hop where it has already been
 unavPenalty = -10       # Penalty if the satellite tries to send the block to a direction where there is no linked satellite
 biggestDist = -1        # Normalization factor for the distance reward. This is updated in the creation of the graph.
@@ -123,6 +119,21 @@ distanceRew = 4          # 1: Distance reward normalized to total distance.
                          # 3: Distance reward normalized to maximum close up
                          # 4: Distance reward normalized by max isl distance ~3.700 km for Kepler constellation. This is the one used in the papers.
                          # 5: Only negative rewards proportional to traveled distance normalized by 1.000 km
+
+# =============================================================================
+# 9. RL/DRL Hyperparameters
+# =============================================================================
+ddqn        = True      # Activates DDQN, where now there are two DNNs, a target-network and a q-network
+alpha       = 0.0002      # learning rate for Q-Tables
+alpha_dnn   = alpha      # learning rate for the deep neural networks
+gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
+epsilon     = 0.1       # exploration factor for Q-Learning ONLY
+tau         = 0.01       # rate of copying the weights from the Q-Network to the target network
+learningRate= alpha     # Default learning rate for Adam optimizer
+distillationLR = 0.00005 # Learning rate for the student optimizer in policy distillation
+distillationLossFun = 'KL_v2' # Loss function for policy distillation. Options: 'MSE', 'Huber' and 'KL', 'KLv2'
+nTrain      = 120         # The DNN will train every nTrain steps
+noPingPong  = True      # when a neighbour is the destination satellite, send there directly without going through the dnn (Change policy)
 
 # Deep Learning
 MAX_EPSILON = 0.99      # Maximum value that the exploration parameter can have
@@ -135,35 +146,30 @@ updateF     = 2800      # every updateF updates, the Q-Network will be copied in
 batchSize   = 128        # batchSize samples are taken from bufferSize samples to train the network
 bufferSize  = 100000        # bufferSize samples are used to train the network
 train_epoch = 4
+
 # Stop Loss
-# Train       = True      # Global for all scenarios with different number of GTs. if set to false, the model will not train any of them
 stopLoss    = False     # activates the stop loss function
 nLosses     = 50        # Nº of loss samples used for the stop loss
 lThreshold  = 0.5       # If the mean of the last nLosses are lower than lossThreshold, the mdoel stops training
 TrainThis   = Train     # Local for a single scenario with a certain number of GTs. If the stop loss is activated, this will be set to False and the scenario will not train anymore. 
                         # When another scenario is about to run, TrainThis will be set to Train again
 
-# GPU/CPU settings
+# =============================================================================
+# 10. Hardware Settings
+# =============================================================================
 use_gpu     = True      # 是否使用GPU加速（如果可用）。如果设为False，将强制使用CPU
 print_device_info = True # 是否打印设备信息
 
-# Other
-CurrentGTnumber = -1    # Number of active gateways. This number will be updated every time a gateway is added. In the simulation it will iterate the GTs list
-
-###############################################################################
-###############################      Paths      ###############################
-###############################################################################
-
-# nnpath      = './pre_trained_NNs/qNetwork_8GTs_6secs_nocon.h5'
-# nnpathTarget= './pre_trained_NNs/qTarget_8GTs_6secs_nocon.h5'
-# nnpath      = './pre_trained_NNs/qNetwork_3GTs.h5'
-# nnpathTarget= './pre_trained_NNs/qTarget_3GTs.h5'
-# nnpath      = './pre_trained_NNs/qNetwork_2GTs.h5'
-# nnpathTarget= './pre_trained_NNs/qTarget_2GTs.h5'
+# =============================================================================
+# 11. Paths & Files
+# =============================================================================
 nnpath      = './pre_trained_NNs/qNetwork_2GTs_lastHop.h5'
 nnpathTarget= './pre_trained_NNs/qTarget_2GTs_lastHop.h5'
 tablesPath  = './pre_trained_NNs/qTablesExport_8GTs/'
 
+# =============================================================================
+# 12. Federated Learning Specifics
+# =============================================================================
 FL_techs    = ['nothing', 'modelAnticipation', 'plane', 'full', 'combination']
 FL_tech     = FL_techs[4]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
 if FL_tech == 'combination':
@@ -177,4 +183,3 @@ if FL_Test:
     CKA_Values = []     # CKA matrix 
     num_samples = 10   # number of random samples to test the divergence between models
     print(f'Federated Learning ongoing: {FL_tech}. Number of random samples to test divergence: {num_samples}')
-

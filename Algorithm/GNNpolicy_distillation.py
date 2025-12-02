@@ -420,6 +420,12 @@ class GNNTSDDQNetwork:
             return 0
         # 选择动作
         nextHop, actIndex = self.getNextHop_dgl(new_state_g_dgl, linkedSats, sat, block)
+        info = {
+            "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
+            # "simulation_time": sat.env.now
+            }
+        swanlab.log(info)
+
         if nextHop == -1:
             return 0
 
@@ -489,7 +495,7 @@ class GNNTSDDQNetwork:
         
 
     def alignEpsilon(self, step, sat):
-        epsilon = self.minEps + (self.maxEps - self.minEps) * math.exp(-LAMBDA * step/10 / (decayRate * (CurrentGTnumber**2)))
+        epsilon = self.minEps + (self.maxEps - self.minEps) * math.exp(-LAMBDA * step / (decayRate * (CurrentGTnumber**2)))
         self.epsilon.append([epsilon, sat.env.now])
         return epsilon
 
@@ -599,8 +605,8 @@ class GNNTSDDQNetwork:
                         "DistillLoss": distill_loss.item(),
                         "learning_rate": lr,
                         "predictQ": target_q_values.mean().item(),
-                        "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
-                        # "simulation_time": sat.env.now
+                        # "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
+                        "simulation_time": sat.env.now
                     }
                     swanlab.log(info)
             
@@ -610,8 +616,8 @@ class GNNTSDDQNetwork:
                         "RLloss": rl_loss.item(),
                         "learning_rate": lr,
                         "predictQ": target_q_values.mean().item(),
-                        "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
-                        # "simulation_time": sat.env.now
+                        # "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
+                        "simulation_time": sat.env.now
                     }
                     swanlab.log(info)
             

@@ -392,6 +392,8 @@ def getPositionState(cur_sat, cen_sat, dest_sat):
     """
     Obtain absolute position state for the given satellite.
     """
+    if cur_sat.latitude is None or cur_sat.longitude is None:
+        return np.array([[notAvail, notAvail, notAvail, notAvail, notAvail, notAvail]])
     # 1. 绝对坐标
     abs_pos = np.array([
         get_absolute_position(cur_sat.latitude, latBias, coordGran),
@@ -544,15 +546,11 @@ def get_subgraph_state(block, sat, g, earth):
     n_order_graph = nx.Graph(g_undirected.subgraph(nodes))
 
     satDest = block.destination.linkedSat[1]
-    srcGs = block.source
-    destGS = block.destination
-    if destGS.name in n_order_graph.nodes():
-        # node_list.remove(destGS.name)
-        n_order_graph.remove_node(destGS.name)
 
-    if srcGs.name in n_order_graph.nodes():
-        # node_list.remove(srcGs)
-        n_order_graph.remove_node(srcGs.name)
+    # Remove all gateways from the subgraph to ensure only satellites remain
+    for GT in earth.gateways:
+        if GT.name in n_order_graph.nodes():
+            n_order_graph.remove_node(GT.name)
 
     # --- FIX: 强制节点映射顺序一致性 ---
     # 将节点标签转换为整数，并按排序顺序排列，确保 DGL 和 NetworkX 使用相同的 ID 映射
