@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
+import dgl
 from dgl import DGLGraph
 import numpy as np
-from MAGNA.MAGNAConv import MAGNALayer
+from ..MAGNA.MAGNAConv import MAGNALayer
 
 class MAGNA(nn.Module):
     def __init__(self,
@@ -10,16 +11,17 @@ class MAGNA(nn.Module):
                  num_layers: int,
                  input_dim: int,
                  hidden_dim: int,
+                 action_dim: int,
                  hop_num: int,
                  alpha: float,
-                 num_classes: int,
+                 n_order_adj: int,
                  heads: list,
-                 top_k:int,
+                #  top_k:int,
                  feat_drop: float,
                  attn_drop: float,
                  negative_slope: float,
                  edge_drop: float,
-                 topk_type: str,
+                #  topk_type: str,
                  self_loop_number: int,
                  undirected_graph=True,
                  self_loop=True,
@@ -28,7 +30,7 @@ class MAGNA(nn.Module):
                  head_tail_shared=True,
                  project_dim=-1):
         super(MAGNA, self).__init__()
-        # self.g = g
+        self.g = None
         self.gdt_layers = nn.ModuleList()
         self.self_loop = self_loop
         self.number_self_loops = self_loop_number
@@ -43,39 +45,66 @@ class MAGNA(nn.Module):
             self.input_features = input_dim
 
         self.num_layers = num_layers
+        self.n_order_adj = n_order_adj
         self.edge_drop = edge_drop
-        self.gdt_layers.append(MAGNALayer(in_feats=self.input_features, hop_num=hop_num, top_k=top_k, num_heads=heads[0], hidden_dim=hidden_dim,
-                                                 topk_type=topk_type, layer_norm=self.layer_norm, feed_forward=self.feed_forward, head_tail_shared=head_tail_shared,
-                                                 alpha=alpha, negative_slope=negative_slope, feat_drop=feat_drop, attn_drop=attn_drop))
+        self.gdt_layers.append(MAGNALayer(in_feats=self.input_features, hop_num=hop_num, num_heads=heads[0], hidden_dim=hidden_dim,
+                                                layer_norm=self.layer_norm, feed_forward=self.feed_forward, head_tail_shared=head_tail_shared,
+                                                alpha=alpha, negative_slope=negative_slope, feat_drop=feat_drop, attn_drop=attn_drop))
         for l in range(1, self.num_layers):
-            self.gdt_layers.append(MAGNALayer(in_feats=hidden_dim, hop_num=hop_num, hidden_dim=hidden_dim, num_heads=heads[l], top_k=top_k,
-                                                     layer_norm=self.layer_norm, feed_forward=self.feed_forward, head_tail_shared=head_tail_shared,
-                                                     topk_type=topk_type, alpha=alpha, negative_slope=negative_slope, feat_drop=feat_drop, attn_drop=attn_drop))
-        self.classifier = nn.Linear(in_features=hidden_dim, out_features=num_classes)
+            self.gdt_layers.append(MAGNALayer(in_feats=hidden_dim, hop_num=hop_num, hidden_dim=hidden_dim, num_heads=heads[l],
+                                                    layer_norm=self.layer_norm, feed_forward=self.feed_forward, head_tail_shared=head_tail_shared,
+                                                    alpha=alpha, negative_slope=negative_slope, feat_drop=feat_drop, attn_drop=attn_drop))
+        print('num of node in each batch:', 2 * n_order_adj * (n_order_adj + 1) + 1)
+        self.policy =  nn.Sequential(
+            nn.Linear(in_features=hidden_dim * (2 * n_order_adj * (n_order_adj + 1) + 1), out_features=hidden_dim * 20),
+            nn.ReLU(),
+            nn.Dropout(p=feat_drop),
+
+            nn.Linear(in_features=hidden_dim * 20, out_features=hidden_dim * 5),
+            nn.ReLU(),
+            nn.Dropout(p=feat_drop),
+
+            nn.Linear(in_features=hidden_dim * 5, out_features=action_dim)
+        )
+        # self.classifier = nn.Linear(in_features=hidden_dim, out_features=num_classes)
         self.feat_drop_out = nn.Dropout(p=feat_drop)
         self.reset_parameters()
 
     def reset_parameters(self):
         """Reinitialize learnable parameters."""
-        if isinstance(self.classifier, nn.Linear):
-            nn.init.xavier_normal_(self.classifier.weight.data)
+        if isinstance(self.policy, nn.Linear):
+            nn.init.xavier_normal_(self.policy.weight.data)
         if self.project is not None and isinstance(self.project, nn.Linear):
             nn.init.xavier_normal_(self.project.weight.data)
 
     def forward(self, inputs):
-        number_edges = self.g.number_of_edges()
+
         if self.project is not None:
             h = self.project(self.feat_drop_out(inputs))
         else:
             h = inputs
         for l in range(self.num_layers):
-            if self.undirected_graph:
-                drop_edge_ids = self.get_drop_edge_pair_ids(number_edges - self.number_self_loops)
-            else:
-                drop_edge_ids = self.get_drop_edge_ids(number_edges - self.number_self_loops)
-            h = self.gdt_layers[l](self.g, h, drop_edge_ids)
-        logits = self.classifier(h)
+
+            h = self.gdt_layers[l](self.g, h)
+        each_batch_node_num = 2 * self.n_order_adj * (self.n_order_adj + 1) + 1
+        batch_size = inputs.shape[0] // each_batch_node_num
+        h = h.view(batch_size, -1)
+        logits = self.policy(h)
         return logits
+    # def forward(self, inputs):
+    #     number_edges = self.g.number_of_edges()
+    #     if self.project is not None:
+    #         h = self.project(self.feat_drop_out(inputs))
+    #     else:
+    #         h = inputs
+    #     for l in range(self.num_layers):
+    #         if self.undirected_graph:
+    #             drop_edge_ids = self.get_drop_edge_pair_ids(number_edges - self.number_self_loops)
+    #         else:
+    #             drop_edge_ids = self.get_drop_edge_ids(number_edges - self.number_self_loops)
+    #         h = self.gdt_layers[l](self.g, h, drop_edge_ids)
+    #     logits = self.policy(h)
+    #     return logits
 
     def get_drop_edge_ids(self, number_edges):
         drop_edge_num = int(number_edges * self.edge_drop)
@@ -120,5 +149,5 @@ class MAGNA(nn.Module):
             h, attentions = self.gdt_layers[l].forward_for_evaluataion(self.g, h, drop_edge_ids)
             layer_node_features.append(h)
             layer_attentions.append(attentions)
-        logits = self.classifier(h)
+        logits = self.policy(h)
         return logits, layer_node_features, layer_attentions

@@ -6,7 +6,7 @@ from dgl.nn.pytorch.softmax import edge_softmax
 from dgl import DGLGraph
 import dgl.function as fn
 # from MAGNA.layernormalization import RMSLayerNorm as LayerNorm
-from MAGNA.layernormalization import STDLayerNorm as LayerNorm
+from .layernormalization import STDLayerNorm as LayerNorm
 
 class PositionwiseFeedForward(nn.Module):
     "Implements FFN equation."

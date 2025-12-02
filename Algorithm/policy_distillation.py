@@ -232,33 +232,33 @@ class TSDDQNetwork:
                 if Train:
                     log_reward(sum(block.stepReward) if block.stepReward else reward)
                 return -1
-            # 检查是否到达目标网关
-            if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
-                # 计算奖励并存储经验
-                if distanceRew == 4:
-                    satDest = block.destination.linkedSat[1]
-                    distanceReward  = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
-                    queueReward     = getQueueReward   (block.queueTime[len(block.queueTime)-1], self.w1)
-                    reward          = distanceReward + queueReward + ArriveReward
+        # 检查是否到达目标网关
+        if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
+            # 计算奖励并存储经验
+            if distanceRew == 4:
+                satDest = block.destination.linkedSat[1]
+                distanceReward  = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+                queueReward     = getQueueReward   (block.queueTime[len(block.queueTime)-1], self.w1)
+                reward          = distanceReward + queueReward + ArriveReward
 
-                elif distanceRew == 5:
-                    distanceReward  = getDistanceRewardV5(prevSat, sat, self.w2)
-                    reward          = distanceReward + ArriveReward
-                else:
-                    reward = ArriveReward  # 需根据具体逻辑调整
+            elif distanceRew == 5:
+                distanceReward  = getDistanceRewardV5(prevSat, sat, self.w2)
+                reward          = distanceReward + ArriveReward
+            else:
+                reward = ArriveReward  # 需根据具体逻辑调整
 
-                if not args:
-                    block.stepReward.append(reward)
-                else:
-                    block.stepReward[-1] = reward
-                self.experienceReplay.store(block.oldState, block.oldAction, reward, new_state_g_dgl, True)
-                self.earth.rewards.append([reward, sat.env.now])
-                
-                # 记录到达奖励
-                if Train:
-                    log_reward(sum(block.stepReward) if block.stepReward else reward)
-                
-                return 0
+            if not args:
+                block.stepReward.append(reward)
+            else:
+                block.stepReward[-1] = reward
+            self.experienceReplay.store(block.oldState, block.oldAction, reward, new_state_g_dgl, True)
+            self.earth.rewards.append([reward, sat.env.now])
+            
+            # 记录到达奖励
+            if Train:
+                log_reward(sum(block.stepReward) if block.stepReward else reward)
+            
+            return 0
         # 选择动作
         nextHop, actIndex = self.getNextHop(new_state_g_dgl, linkedSats, sat, block)
         if nextHop == -1:

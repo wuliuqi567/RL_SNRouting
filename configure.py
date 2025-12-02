@@ -1,6 +1,6 @@
 # HOT PARAMS - This parameters should be revised before every simulation
-pathings    = ['hop', 'dataRate', 'dataRateOG', 'slant_range', 'Q-Learning', 'Deep Q-Learning', 'Policy Distillation']
-pathing     = pathings[6]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
+pathings    = ['hop', 'dataRate', 'dataRateOG', 'slant_range', 'Q-Learning', 'Deep Q-Learning', 'Policy Distillation', 'GNNPD']
+pathing     = pathings[7]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
 
 FL_Test     = True     # If True, it plots the model divergence the model divergence between agents
 plotSatID   = True      # If True, plots the ID of each satellite
@@ -30,7 +30,7 @@ w4          = 5         # Normalization for the distance reward, for the travele
 
 gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
 
-GTs = [4]               # number of gateways to be tested
+GTs = [2]               # number of gateways to be tested
 # Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
 # GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
 
@@ -80,13 +80,14 @@ diff        = True          # If up, the state space gives no coordinates about 
 diff_lastHop= True          # If up, this state is the same as diff, but it includes the last hop where the block was in order to avoid loops
 reducedState= False         # if set to true the DNN will receive as input only the positional information, but not the queueing information
 third_adj    = True          # If up, the state space includes the 3rd order neighbors information
+n_order_adj = 4   
 notAvail    = 0             # this value is set in the state space when the satellite neighbour is not available
 
 # Learning Hyperparameters
 ddqn        = True      # Activates DDQN, where now there are two DNNs, a target-network and a q-network
 # importQVals = False     # imports either QTables or NN from a certain path
 plotPath    = False     # plots the map with the path after every decision
-alpha       = 0.0001      # learning rate for Q-Tables
+alpha       = 0.0002      # learning rate for Q-Tables
 alpha_dnn   = alpha      # learning rate for the deep neural networks
 # gamma       = 0.99       # greedy factor. Smaller -> Greedy. Optimized params: 0.6 for Q-Learning, 0.99 for Deep Q-Learning
 epsilon     = 0.1       # exploration factor for Q-Learning ONLY

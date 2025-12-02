@@ -479,11 +479,12 @@ def positive_Grid_matching(earth):
         west_distance = slant_range_los[i, Satellites.index(west)]
         
         if east_distance == math.inf:
+            print(f"[Connection Failed] Satellite {sat.ID} -> East Neighbor {east.ID} (Orbit {east_orbit}). Reason: LOS blocked or Distance > Max Range.")
             east = None
-            print(f"Satellite {sat.ID} has no east satellite based on positive grid matching.")
+            
         if west_distance == math.inf:
+            print(f"[Connection Failed] Satellite {sat.ID} -> West Neighbor {west.ID} (Orbit {west_orbit}). Reason: LOS blocked or Distance > Max Range.")
             west = None
-            print(f"Satellite {sat.ID} has no west satellite based on positive grid matching.")
 
         # Add edges for east and west satellites
         if east:
@@ -656,13 +657,16 @@ def createGraph(earth, matching='Greedy'):
     ###############################
     for plane in earth.LEO:
         for sat in plane.sats:
-            g.add_node(sat.ID, sat=sat)
+            # g.add_node(sat.ID, sat=sat)
+            g.add_node(sat.ID, latitude=sat.latitude, longitude=sat.longitude)
+
 
     # add gateways and GSL edges
     ###############################
     for GT in earth.gateways:
         if GT.linkedSat[1]:
-            g.add_node(GT.name, GT = GT)            # add GT as node
+            # g.add_node(GT.name, GT = GT)            # add GT as node
+            g.add_node(GT.name, latitude=GT.latitude, longitude=GT.longitude)            # add GT as node
             g.add_edge(GT.name, GT.linkedSat[1].ID, # add GT linked sat as edge
             slant_range = GT.linkedSat[0],          # slant range
             invDataRate = 1/GT.dataRate,            # Inverse of dataRate
@@ -854,6 +858,30 @@ def create_Constellation(specific_constellation, env, earth):
 
 
 
+# def getShortestPath(source, destination, weight, g):
+#     '''
+#     Gives you the shortest path between a source and a destination and plots it if desired.
+#     Uses the 'dijkstra' algorithm to compute the sortest path, where the total weight of the path can be either the sum of inverse
+#     of the maximumm dataRate achevable, the total slant range or the number of hops taken between source and destination.
+
+#     returns a list where each element is a sublist with the name of the node, its longitude and its latitude.
+#     '''
+
+#     path = []
+#     try:
+#         shortest = nx.shortest_path(g, source, destination, weight = weight)    # computes the shortest path [dataRate, slant_range, hops]
+#         for hop in shortest:                                                    # pre process the data so it can be used in the future
+#             key = list(g.nodes[hop])[0]
+#             if shortest.index(hop) == 0 or shortest.index(hop) == len(shortest)-1:
+#                 path.append([hop, g.nodes[hop][key].longitude, g.nodes[hop][key].latitude])
+#             else:
+#                 path.append([hop, math.degrees(g.nodes[hop][key].longitude), math.degrees(g.nodes[hop][key].latitude)])
+#     except Exception as e:
+#         print(f"getShortestPath Caught an exception: {e}")
+#         print('No path between ' + source + ' and ' + destination + ', check the graph to see more details.')
+#         return -1
+#     return path
+
 def getShortestPath(source, destination, weight, g):
     '''
     Gives you the shortest path between a source and a destination and plots it if desired.
@@ -867,11 +895,11 @@ def getShortestPath(source, destination, weight, g):
     try:
         shortest = nx.shortest_path(g, source, destination, weight = weight)    # computes the shortest path [dataRate, slant_range, hops]
         for hop in shortest:                                                    # pre process the data so it can be used in the future
-            key = list(g.nodes[hop])[0]
+            # key = list(g.nodes[hop])[0]
             if shortest.index(hop) == 0 or shortest.index(hop) == len(shortest)-1:
-                path.append([hop, g.nodes[hop][key].longitude, g.nodes[hop][key].latitude])
+                path.append([hop, g.nodes[hop]['longitude'], g.nodes[hop]['latitude']])
             else:
-                path.append([hop, math.degrees(g.nodes[hop][key].longitude), math.degrees(g.nodes[hop][key].latitude)])
+                path.append([hop, math.degrees(g.nodes[hop]['longitude']), math.degrees(g.nodes[hop]['latitude'])])
     except Exception as e:
         print(f"getShortestPath Caught an exception: {e}")
         print('No path between ' + source + ' and ' + destination + ', check the graph to see more details.')

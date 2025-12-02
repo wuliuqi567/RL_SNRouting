@@ -875,7 +875,7 @@ class Earth:
                                     'D': linkedSats['D'],
                                     'R': linkedSats['R'],
                                     'L': linkedSats['L']}
-                elif self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Policy Distillation':
+                elif self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Policy Distillation' or self.pathParam == 'GNNPD':
                     # update ISL. Intra-plane should not change
                     sat.findIntraNeighbours(self)
                     sat.findInterNeighbours(self)
@@ -1449,7 +1449,7 @@ class Earth:
             for GT in self.gateways:
                 GT.graph = graph
 
-            if self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Q-Learning' or self.pathParam == 'Policy Distillation':
+            if self.pathParam == 'Deep Q-Learning' or self.pathParam == 'Q-Learning' or self.pathParam == 'Policy Distillation' or self.pathParam == 'GNNPD':
                 self.updateSatelliteProcessesRL(graph)
             else:
                 self.updateSatelliteProcessesCorrect(graph)

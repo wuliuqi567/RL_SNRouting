@@ -527,9 +527,21 @@ def get_subgraph_state(block, sat, g, earth):
               slant range and data rate.
     """
     # 获取n阶子图
-
     n_order = 4
-    n_order_graph = nx.ego_graph(g, sat.ID, radius=n_order, center=True, undirected=True)
+    
+    # 手动实现 ego_graph 的逻辑以避免 deepcopy
+    
+    # 1. 获取无向图视图，避免 deepcopy
+    if g.is_directed():
+        g_undirected = g.to_undirected(as_view=True)
+    else:
+        g_undirected = g
+        
+    # 2. 找到 n 阶邻居节点
+    nodes = list(nx.single_source_shortest_path_length(g_undirected, sat.ID, cutoff=n_order).keys())
+    
+    # 3. 创建子图的浅拷贝 (nx.Graph(subgraph) 默认是浅拷贝属性)
+    n_order_graph = nx.Graph(g_undirected.subgraph(nodes))
 
     satDest = block.destination.linkedSat[1]
     srcGs = block.source
@@ -542,17 +554,49 @@ def get_subgraph_state(block, sat, g, earth):
         # node_list.remove(srcGs)
         n_order_graph.remove_node(srcGs.name)
 
-    node_list = list(n_order_graph.nodes())
+    # --- FIX: 强制节点映射顺序一致性 ---
+    # 将节点标签转换为整数，并按排序顺序排列，确保 DGL 和 NetworkX 使用相同的 ID 映射
+    # label_attribute='orig_id' 保留原始节点 ID (如 '17_20') 以备查
+    n_order_graph_int = nx.convert_node_labels_to_integers(n_order_graph, ordering='sorted', label_attribute='orig_id')
+    
+    # 获取排序后的原始节点名称列表，用于查找 center_node_id
+    sorted_node_names = sorted(list(n_order_graph.nodes()))
+    
+    # 找到中心节点在排序列表中的索引，这就是它在 n_order_graph_int 中的新整数 ID
+    center_node_id = sorted_node_names.index(sat.ID)
+    
+    dgl_g = from_networkx(n_order_graph_int) 
+    
+    # 获取一阶邻居在DGL图中的ID
+    # 在DGL图中，邻居可以通过 successors 或 predecessors 获取（无向图两者相同）
+    first_order_neighbor_ids = dgl_g.successors(center_node_id).tolist()
+    
+    # 将中心节点ID和一阶邻居ID存储在图的属性中，方便后续使用
+    dgl_g.ndata['is_center'] = torch.zeros(dgl_g.num_nodes(), dtype=torch.bool)
+    dgl_g.ndata['is_center'][center_node_id] = True
+    
+    dgl_g.ndata['is_first_order'] = torch.zeros(dgl_g.num_nodes(), dtype=torch.bool)
+    dgl_g.ndata['is_first_order'][first_order_neighbor_ids] = True
 
-    dgl_g = from_networkx(n_order_graph) # , edge_attrs=['slant_range', 'dataRateOG'] 无相图不能直接提取边属性，需要手动赋值
     src, dst = dgl_g.edges()
     
     weights = []
 
     for src_idx, dst_idx in zip(src, dst):
-        slant_range = n_order_graph.edges[node_list[src_idx.item()], node_list[dst_idx.item()]]['slant_range']
-        dataRate = n_order_graph.edges[node_list[src_idx.item()], node_list[dst_idx.item()]]['dataRateOG']
-        weights.append([slant_range, dataRate])
+        # 直接使用整数索引访问转换后的图，避免映射错误
+        u_int = src_idx.item()
+        v_int = dst_idx.item()
+        
+        try:
+            slant_range = n_order_graph_int.edges[u_int, v_int]['slant_range']
+            dataRate = n_order_graph_int.edges[u_int, v_int]['dataRateOG']
+            weights.append([slant_range, dataRate])
+        except KeyError as e:
+            # 获取原始 ID 用于报错信息
+            u_orig = n_order_graph_int.nodes[u_int]['orig_id']
+            v_orig = n_order_graph_int.nodes[v_int]['orig_id']
+            print(f"KeyError accessing edge: {u_orig} ({u_int}) -> {v_orig} ({v_int})")
+            raise e
         
     # 将weights特征对应归一化
     weights = np.array(weights)
@@ -580,7 +624,9 @@ def get_subgraph_state(block, sat, g, earth):
     features = []
     # DGL节点ID是连续的整数 0, 1, ... N-1
     for nodeId in range(dgl_g.num_nodes()):
-        origin_nodeid = node_list[nodeId] # 映射回原始ID
+        # origin_nodeid = node_list[nodeId] # 映射回原始ID
+        # 使用 n_order_graph_int 中的 orig_id 属性获取原始 ID
+        origin_nodeid = n_order_graph_int.nodes[nodeId]['orig_id']
         sat_node = findByID(earth, origin_nodeid)
         node_data = get_sat_info_v2(sat_node, sat, satDest)
         features.append(node_data)
