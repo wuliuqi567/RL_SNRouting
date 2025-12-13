@@ -59,19 +59,6 @@ def parse_args(args=None):
     args = parser.parse_args(args)
     return args
 
-def accuracy(logits, labels):
-    _, indices = torch.max(logits, dim=1)
-    correct = torch.sum(indices == labels)
-    return correct.item() * 1.0 / len(labels)
-
-
-def evaluate(model, features, labels, mask):
-    model.eval()
-    with torch.no_grad():
-        full_logits = model(features)
-        logits = full_logits[mask]
-        labels = labels[mask]
-        return accuracy(logits, labels), full_logits
 
 def set_logger(args):
     '''
@@ -124,34 +111,15 @@ def args2foldername(args):
 
 
 
-class GNNTSDDQNetwork:
+class BaseRLAgent:
+    """Base class for RL Agents."""
     def __init__(self, NGT, hyperparams, earth, sat_ID=None):
-        # 设备设置 - 根据配置选择设备
-        if use_gpu and torch.cuda.is_available():
-            self.device = torch.device('cuda')
-        else:
-            self.device = torch.device('cpu')
-        
-        args = parse_args()
-        self.model_save_path = preprocess(args)
-
-            
         self.actions = ('U', 'D', 'R', 'L')
-        self.n_order_adj = hyperparams.n_order_adj    # 假设hyperparams包含该属性
-        # 定义状态空间
-        args.hop_num =  self.n_order_adj
-        if self.n_order_adj:
-            self.states = 10 # dimension of each node feature
-        
-        # num of node is 2*n(n+1)+1, n is the order of adjacency matrix
-        
         self.actionSize = len(self.actions)
-        self.stateSize = 10 * (2 * self.n_order_adj * (self.n_order_adj + 1) + 1)
-        self.destinations = NGT
         self.earth = earth
         self.sat_ID = sat_ID
-
-        # 超参数
+        
+        # Hyperparameters
         self.alpha = hyperparams.alpha
         self.gamma = hyperparams.gamma
         self.maxEps = hyperparams.MAX_EPSILON
@@ -165,100 +133,73 @@ class GNNTSDDQNetwork:
         self.batchS = hyperparams.batchSize
         self.bufferS = hyperparams.bufferSize
         self.hardUpd = hyperparams.hardUpdate
+        self.ddqn = hyperparams.ddqn
+        
+        self.step = 0
+        self.i = 0
+        self.epsilon = []
+        self.experienceReplay = ExperienceReplay(self.bufferS)
+
+        # Device setup
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+            print("Using GPU")
+        else:
+            self.device = torch.device('cpu')
+            print("Using CPU")
+
+    def alignEpsilon(self, step, sat):
+        epsilon = self.minEps + (self.maxEps - self.minEps) * math.exp(-LAMBDA * step / (decayRate * (CurrentGTnumber**2)))
+        self.epsilon.append([epsilon, sat.env.now])
+        return epsilon
+
+    def hard_update_target(self):
+        """Hard update: copy weights from Q network to Target network."""
+        if hasattr(self, 'qTarget') and hasattr(self, 'qNetwork'):
+            self.qTarget.load_state_dict(self.qNetwork.state_dict())
+
+    def soft_update_target(self, tau=None):
+        """Soft update: exponential moving average."""
+        if hasattr(self, 'qTarget') and hasattr(self, 'qNetwork'):
+            tau = self.tau if tau is None else tau
+            for target_param, source_param in zip(self.qTarget.parameters(), self.qNetwork.parameters()):
+                target_param.data.copy_(tau * source_param.data + (1.0 - tau) * target_param.data)
+
+
+class GNNTSDDQNetwork(BaseRLAgent):
+    def __init__(self, NGT, hyperparams, earth, sat_ID=None):
+        super().__init__(NGT, hyperparams, earth, sat_ID)
+        
+        self.args = parse_args()
+        self.model_save_path = preprocess(self.args)
+            
+        self.n_order_adj = hyperparams.n_order_adj    # 假设hyperparams包含该属性
+        # 定义状态空间
+        self.args.hop_num =  self.n_order_adj
+        if self.n_order_adj:
+            self.states = 10 # dimension of each node feature
+        
+        self.stateSize = 10 * (2 * self.n_order_adj * (self.n_order_adj + 1) + 1)
+        self.destinations = NGT
+
+        # 特有超参数
         self.importQ = hyperparams.importQ
-        # self.online = hyperparams.online
-        self.ddqn = hyperparams.ddqn  # 新增：是否启用DDQN
         self.algorithm = hyperparams.pathing
         self.outputPath = hyperparams.outputPath if hasattr(hyperparams, 'outputPath') else '../Results'
         self.distillationLR = hyperparams.distillationLR if hasattr(hyperparams, 'distillationLR') else 0.00005
         self.distillationLossFun = hyperparams.distillationLossFun if hasattr(hyperparams, 'distillationLossFun') else 'MSE'
-        self.step = 0
-        self.i = 0
-        self.epsilon = []
-        self.experienceReplay = ExperienceReplay(self.bufferS)  # 假设ExperienceReplay已适配PyTorch
-
-        num_feats = self.states
-        n_order_adj = self.n_order_adj
-        heads = [args.num_heads] * args.num_layers
-        self_loop_number = 1
-
-        # 初始化网络
-        # if Train:
-        self.qNetwork = MAGNA(
-            num_layers=args.num_layers,
-            input_dim=num_feats,
-            project_dim=args.project_dim,
-            hidden_dim=args.num_hidden,
-            action_dim = self.actionSize,
-            n_order_adj=n_order_adj,
-            heads=heads,
-            feat_drop=args.in_drop,
-            attn_drop=args.attn_drop,
-            alpha=args.alpha,
-            hop_num=args.hop_num,
-            # top_k=args.top_k,
-            # topk_type=args.topk_type,
-            edge_drop=args.edge_drop,
-            layer_norm=args.layer_norm,
-            feed_forward=args.feed_forward,
-            self_loop_number=self_loop_number,
-            self_loop=(args.self_loop==1),
-            head_tail_shared=(args.head_tail_shared == 1),
-            negative_slope=args.negative_slope).to(self.device)
-
-            # if self.ddqn:
-        self.qTarget =MAGNA(
-            num_layers=args.num_layers,
-            input_dim=num_feats,
-            project_dim=args.project_dim,
-            hidden_dim=args.num_hidden,
-            action_dim = self.actionSize,
-            n_order_adj=n_order_adj,
-            heads=heads,
-            feat_drop=args.in_drop,
-            attn_drop=args.attn_drop,
-            alpha=args.alpha,
-            hop_num=args.hop_num,
-            # top_k=args.top_k,
-            # topk_type=args.topk_type,
-            edge_drop=args.edge_drop,
-            layer_norm=args.layer_norm,
-            feed_forward=args.feed_forward,
-            self_loop_number=self_loop_number,
-            self_loop=(args.self_loop==1),
-            head_tail_shared=(args.head_tail_shared == 1),
-            negative_slope=args.negative_slope).to(self.device)
         
-        self.sNetwork = MAGNA(
-            num_layers=args.num_layers,
-            input_dim=num_feats,
-            project_dim=args.project_dim,
-            hidden_dim=args.num_hidden,
-            action_dim = self.actionSize,
-            n_order_adj=n_order_adj,
-            heads=heads,
-            feat_drop=args.in_drop,
-            attn_drop=args.attn_drop,
-            alpha=args.alpha,
-            hop_num=args.hop_num,
-            # top_k=args.top_k,
-            # topk_type=args.topk_type,
-            edge_drop=args.edge_drop,
-            layer_norm=args.layer_norm,
-            feed_forward=args.feed_forward,
-            self_loop_number=self_loop_number,
-            self_loop=(args.self_loop==1),
-            head_tail_shared=(args.head_tail_shared == 1),
-            negative_slope=args.negative_slope).to(self.device)
+        num_feats = self.states
+        
+        # 初始化网络
+        self.qNetwork = self._build_model(num_feats)
+        self.qTarget = self._build_model(num_feats)
+        self.sNetwork = self._build_model(num_feats)
                 
         self.hard_update_target()  # 初始同步权重 for teacher and target teacher 
         self.update_student()  # 初始同步权重 for student
-        if sat_ID is None:
-            print("Q-NETWORK created:")
-            print(self.qNetwork)
-            print(f"Network moved to device: {self.device}")
-        else:
-            print(f"Satellite {sat_ID} Q-Network initialized on {self.device}")
+        print(self.qNetwork)
+        
 
         if Train:
             self.hard_update_target()  # 初始同步权重 for teacher and target teacher 
@@ -270,11 +211,7 @@ class GNNTSDDQNetwork:
                 self.qNetwork.load_state_dict(torch.load(self.outputPath + 'NNs/qNetwork_' + str(len(earth.gateways)) + 'GTs' + '.pth', map_location=self.device))
                 self.qTarget.load_state_dict(torch.load(self.outputPath + 'NNs/qTarget_' + str(len(earth.gateways)) + 'GTs' + '.pth', map_location=self.device))
                 self.sNetwork.load_state_dict(torch.load(self.outputPath + 'NNs/sNetwork_' + str(len(earth.gateways)) + 'GTs' + '.pth', map_location=self.device))
-                if sat_ID is None:
-                    print("Q-Network imported!!!")
-                    print(f"Network loaded on device: {self.device}")
-                else:
-                    print(f"Satellite {sat_ID} Q-Network imported on {self.device}!")
+
             except FileNotFoundError:
                 print("Wrong Neural Network path")
 
@@ -301,11 +238,35 @@ class GNNTSDDQNetwork:
         if self.swanlab_initialized and Train:
             init_swanlab(hyperparams)
 
+    def _build_model(self, num_feats):
+        """Helper function to build the MAGNA model."""
+        heads = [self.args.num_heads] * self.args.num_layers
+        return MAGNA(
+            num_layers=self.args.num_layers,
+            input_dim=num_feats,
+            project_dim=self.args.project_dim,
+            hidden_dim=self.args.num_hidden,
+            action_dim=self.actionSize,
+            n_order_adj=self.n_order_adj,
+            heads=heads,
+            feat_drop=self.args.in_drop,
+            attn_drop=self.args.attn_drop,
+            alpha=self.args.alpha,
+            hop_num=self.args.hop_num,
+            edge_drop=self.args.edge_drop,
+            layer_norm=self.args.layer_norm,
+            feed_forward=self.args.feed_forward,
+            self_loop_number=1,
+            self_loop=(self.args.self_loop == 1),
+            head_tail_shared=(self.args.head_tail_shared == 1),
+            negative_slope=self.args.negative_slope
+        ).to(self.device)
+
 
 
     def getNextHop_dgl(self, newState: DGLGraph, linkedSats, sat):
         # 转换状态为PyTorch张量并移动到设备
-        # state_tensor = torch.tensor(newState, dtype=torch.float32, device=self.device).unsqueeze(0)
+
         newState = newState.to(self.device)
 
         if explore and random.uniform(0, 1) < self.alignEpsilon(self.step, sat):
@@ -346,125 +307,112 @@ class GNNTSDDQNetwork:
             return -1
         return [destination.ID, math.degrees(destination.longitude), math.degrees(destination.latitude)], actIndex
 
-    def makeDeepAction(self, block, sat, g, earth, prevSat=None, *args):
+    def _calculate_reward(self, block, sat, prevSat, g, earth, is_terminal=False, is_failure=False):
+        """Helper to calculate reward based on state."""
+        # Failure case (max hops exceeded)
+        if is_failure:
+            hop_penalty = -ArriveReward
+            satDest = block.destination.linkedSat[1]
+            distanceReward = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+            queueReward = getQueueReward(block.queueTime[-1], self.w1)
+            return hop_penalty + distanceReward + queueReward
 
+        # Success case (arrived at destination)
+        if is_terminal:
+            if distanceRew == 4:
+                satDest = block.destination.linkedSat[1]
+                distanceReward = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+                queueReward = getQueueReward(block.queueTime[-1], self.w1)
+                return distanceReward + queueReward + ArriveReward
+            elif distanceRew == 5:
+                distanceReward = getDistanceRewardV5(prevSat, sat, self.w2)
+                return distanceReward + ArriveReward
+            else:
+                return ArriveReward
+
+        # Intermediate step
+        reward = 0.0
+        if prevSat is not None:
+            hop = [sat.ID, math.degrees(sat.longitude), math.degrees(sat.latitude)]
+            again = againPenalty if hop in block.QPath[:len(block.QPath)-2] else 0
+
+            if distanceRew == 1:
+                distanceReward = getDistanceReward(prevSat, sat, block.destination, self.w2)
+            elif distanceRew == 2:
+                prevLinkedSats = getDeepLinkedSats(prevSat, g, earth)
+                distanceReward = getDistanceRewardV2(prevSat, sat, prevLinkedSats['U'], prevLinkedSats['D'], prevLinkedSats['R'], prevLinkedSats['L'], block.destination, self.w2)
+            elif distanceRew == 3:
+                prevLinkedSats = getDeepLinkedSats(prevSat, g, earth)
+                distanceReward = getDistanceRewardV3(prevSat, sat, prevLinkedSats['U'], prevLinkedSats['D'], prevLinkedSats['R'], prevLinkedSats['L'], block.destination, self.w2)
+            elif distanceRew == 4:
+                satDest = block.destination.linkedSat[1]
+                distanceReward = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+            elif distanceRew == 5:
+                distanceReward = getDistanceRewardV5(prevSat, sat, self.w2)
+            else:
+                distanceReward = 0
+
+            try:
+                queueReward = getQueueReward(block.queueTime[-1], self.w1)
+            except IndexError:
+                queueReward = 0
+            
+            reward = distanceReward + again + queueReward
+            
+        return reward
+
+    def _store_experience(self, block, reward, new_state, is_terminal, args, sat):
+        """Helper to store experience and update block rewards."""
+        if not args:
+            block.stepReward.append(reward)
+        else:
+            if len(block.stepReward) > 0:
+                block.stepReward[-1] = reward
+            else:
+                block.stepReward.append(reward)
+        
+        self.experienceReplay.store(block.oldState, block.oldAction, reward, new_state, is_terminal)
+        self.earth.rewards.append([reward, sat.env.now])
+
+    def makeDeepAction(self, block, sat, g, earth, prevSat=None, *args):
         linkedSats = getDeepLinkedSats(sat, g, earth)
         new_state_g_dgl = get_subgraph_state(block, sat, g, earth, n_order=self.n_order_adj)
-        
         self.step += 1
-       
-        # if hop exceed max hops, return -1
+
+        # 1. Check for Max Hops Failure
         if len(block.QPath) > 110:
-            if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
-                pass
-            else:
-                hop_penalty = -ArriveReward
-                satDest = block.destination.linkedSat[1]
-                distanceReward  = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
-                queueReward     = getQueueReward   (block.queueTime[len(block.queueTime)-1], self.w1)
-                reward = hop_penalty + distanceReward + queueReward
-                # 添加奖励大小约束到-1到1之间
-                
-                                                        
-                if not args:
-                    block.stepReward.append(reward)
-                else:
-                    block.stepReward[-1] = reward
-                self.experienceReplay.store(block.oldState, block.oldAction, reward, new_state_g_dgl, True)
-                self.earth.rewards.append([reward, sat.env.now])
+            if not (sat.linkedGT and block.destination.ID == sat.linkedGT.ID):
+                reward = self._calculate_reward(block, sat, prevSat, g, earth, is_failure=True)
+                self._store_experience(block, reward, new_state_g_dgl, True, args, sat)
                 if Train:
                     log_reward(sum(block.stepReward) if block.stepReward else reward)
                 return -1
-        # 检查是否到达目标网关
+
+        # 2. Check for Destination Arrival
         if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
-            # 计算奖励并存储经验
-            if distanceRew == 4:
-                satDest = block.destination.linkedSat[1]
-                distanceReward  = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
-                queueReward     = getQueueReward   (block.queueTime[len(block.queueTime)-1], self.w1)
-                reward          = distanceReward + queueReward + ArriveReward
-
-            elif distanceRew == 5:
-                distanceReward  = getDistanceRewardV5(prevSat, sat, self.w2)
-                reward          = distanceReward + ArriveReward
-            else:
-                reward = ArriveReward  # 需根据具体逻辑调整
-
-            if not args:
-                block.stepReward.append(reward)
-            else:
-                block.stepReward[-1] = reward
-            self.experienceReplay.store(block.oldState, block.oldAction, reward, new_state_g_dgl, True)
-            self.earth.rewards.append([reward, sat.env.now])
-            
-            # 记录到达奖励
+            reward = self._calculate_reward(block, sat, prevSat, g, earth, is_terminal=True)
+            self._store_experience(block, reward, new_state_g_dgl, True, args, sat)
             if Train:
                 log_reward(sum(block.stepReward) if block.stepReward else reward)
-            
             return 0
-        # 选择动作
+
+        # 3. Select Action
         nextHop, actIndex = self.getNextHop_dgl(new_state_g_dgl, linkedSats, sat)
         if Train:
-            info = {
-                "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
-                # "simulation_time": sat.env.now
-                }
-            swanlab.log(info)
+            swanlab.log({"epsilon": self.epsilon[-1][0] if self.epsilon else 0.0})
 
         if nextHop == -1:
             return 0
 
-        # 计算奖励（需根据具体逻辑调整）
-        reward = 0.0
-        if prevSat is not None:
-            hop = [sat.ID, math.degrees(sat.longitude), math.degrees(sat.latitude)]
-            # if hop in block.QPath[:-2]:
-            #     reward -= 1.0  # 惩罚重复访问
-            # # 计算距离奖励和队列奖励...
-            if hop in block.QPath[:len(block.QPath)-2]:
-                again = againPenalty
-            else:
-                again = 0
+        # 4. Intermediate Step Reward
+        reward = self._calculate_reward(block, sat, prevSat, g, earth)
+        self._store_experience(block, reward, new_state_g_dgl, False, args, sat)
 
-            if distanceRew == 1:
-                distanceReward  = getDistanceReward(prevSat, sat, block.destination, self.w2)
-            elif distanceRew == 2:
-                prevLinkedSats  = getDeepLinkedSats(prevSat, g, earth)
-                distanceReward  = getDistanceRewardV2(prevSat, sat, prevLinkedSats['U'], prevLinkedSats['D'], prevLinkedSats['R'], prevLinkedSats['L'], block.destination, self.w2)
-            elif distanceRew == 3:
-                prevLinkedSats  = getDeepLinkedSats(prevSat, g, earth)
-                distanceReward  = getDistanceRewardV3(prevSat, sat, prevLinkedSats['U'], prevLinkedSats['D'], prevLinkedSats['R'], prevLinkedSats['L'], block.destination, self.w2)
-            elif distanceRew == 4:
-                satDest = block.destination.linkedSat[1]
-                distanceReward  = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
-                # distanceReward  = getDistanceRewardV4(prevSat, sat, block.destination, self.w2, self.w4)
-            elif distanceRew == 5:
-                distanceReward  = getDistanceRewardV5(prevSat, sat, self.w2)
-
-            try:
-                queueReward     = getQueueReward   (block.queueTime[len(block.queueTime)-1], self.w1)
-            except IndexError:
-                queueReward = 0 # FIXME In some hop the queue time was not appended to block.queueTime, line 620
-            reward          = distanceReward + again + queueReward
-
-            if not args:
-                block.stepReward.append(reward)
-            else:
-                if len(block.stepReward) > 0:
-                    block.stepReward[-1] = reward
-                else:
-                    block.stepReward.append(reward)
-            # 存储经验
-            self.experienceReplay.store(block.oldState, block.oldAction, reward, new_state_g_dgl, False)
-            # self.earth.rewards.append([reward, sat.env.now])
-            # log_reward(reward)
-
-
+        # 5. Train
         if Train and self.step % nTrain == 0:
             self.train(sat, earth)
-            
-        
-        # 更新目标网络
+
+        # 6. Update Target Network
         if self.ddqn and Train:
             if self.hardUpd:
                 self.i += 1
@@ -480,33 +428,77 @@ class GNNTSDDQNetwork:
         
 
     def alignEpsilon(self, step, sat):
-        epsilon = self.minEps + (self.maxEps - self.minEps) * math.exp(-LAMBDA * step / (decayRate * (CurrentGTnumber**2)))
-        self.epsilon.append([epsilon, sat.env.now])
-        return epsilon
+        return super().alignEpsilon(step, sat)
 
     def hard_update_target(self):
-        """硬更新：直接复制Q网络权重到目标网络"""
-        self.qTarget.load_state_dict(self.qNetwork.state_dict())
+        super().hard_update_target()
 
     def soft_update_target(self, tau=None):
-        """软更新：指数移动平均"""
-        tau = self.tau if tau is None else tau
-        for target_param, source_param in zip(self.qTarget.parameters(), self.qNetwork.parameters()):
-            target_param.data.copy_(tau * source_param.data + (1.0 - tau) * target_param.data)
+        super().soft_update_target(tau)
 
     def update_student(self):
         """将教师网络的权重复制到学生网络"""
         self.sNetwork.load_state_dict(self.qNetwork.state_dict())
 
+    def _compute_rl_loss(self, batched_states, batched_next_states, actions, rewards, dones):
+        """Compute RL loss and return intermediate values."""
+        # 计算当前Q值
+        self.qNetwork.train()
+        self.qNetwork.g = batched_states
+        current_q_values = self.qNetwork(batched_states.ndata['feat'])
+        
+        predict_q_values = current_q_values.gather(1, actions.unsqueeze(1) if actions.dim() == 1 else actions)
+
+        # 计算目标Q值（DDQN逻辑）
+        with torch.no_grad():
+            if self.ddqn:
+                self.qNetwork.g = batched_next_states
+                next_q_values_online = self.qNetwork(batched_next_states.ndata['feat'])
+                
+                self.qTarget.g = batched_next_states
+                next_q_values_target = self.qTarget(batched_next_states.ndata['feat'])
+                
+                next_action = next_q_values_online.argmax(dim=1, keepdim=True)
+                next_q_values = next_q_values_target.gather(1, next_action)
+            else:
+                self.qNetwork.g = batched_next_states
+                all_next_q_values = self.qNetwork(batched_next_states.ndata['feat'])
+                
+                next_q_values = all_next_q_values.max(dim=1, keepdim=True)[0]
+            
+            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
+
+        # RL损失
+        rl_loss = self.loss_fn(target_q_values, predict_q_values)
+        return rl_loss, current_q_values, target_q_values
+
+    def _compute_distillation_loss(self, batched_states, current_q_values):
+        """Compute distillation loss."""
+        pd_graph = batched_states.local_var()
+        keep_mask = pd_graph.ndata['is_center'] | pd_graph.ndata['is_first_order']
+        mask_expanded = keep_mask.unsqueeze(1).float()
+        pd_graph.ndata['pdfeat'] = pd_graph.ndata['feat'] * mask_expanded
+        
+        self.sNetwork.train()
+        self.sNetwork.g = pd_graph
+        student_q_values = self.sNetwork(pd_graph.ndata['pdfeat'])
+        
+        if self.distillationLossFun == 'KL':
+            distill_loss = self.distillation_loss_fn(student_q_values, current_q_values.detach(), temperature=5.0)
+        elif self.distillationLossFun == 'KL_v2':
+            distill_loss = self.distillation_loss_fn(student_q_values, current_q_values.detach(), temperature=5.0)
+        else:
+            distill_loss = self.distillation_loss_fn(current_q_values.detach(), student_q_values)
+        return distill_loss
+
     def train(self, sat, earth):
         if len(self.experienceReplay.buffer) < self.batchS:
             return -1
+        
         for _ in range(self.train_epoch):
-            # 从经验回放中采样
             miniBatch = self.experienceReplay.getBatch(self.batchS)
             states, actions, rewards, next_states, dones = zip(*miniBatch)
               
-            # 使用 dgl.batch 将多个图合并为一个大图
             batched_states = dgl.batch(list(states)).to(self.device)
             batched_next_states = dgl.batch(list(next_states)).to(self.device)
             
@@ -514,97 +506,45 @@ class GNNTSDDQNetwork:
             rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
             dones = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
 
-            # 计算当前Q值
-            self.qNetwork.train()
-            self.qNetwork.g = batched_states
-            current_q_values = self.qNetwork(batched_states.ndata['feat'])
+            # 1. RL Step
+            rl_loss, current_q_values, target_q_values = self._compute_rl_loss(
+                batched_states, batched_next_states, actions, rewards, dones
+            )
             
-            predict_q_values = current_q_values.gather(1, actions.unsqueeze(1) if actions.dim() == 1 else actions)
-
-            # 计算目标Q值（DDQN逻辑）
-            with torch.no_grad():
-                if self.ddqn:
-                    self.qNetwork.g = batched_next_states
-                    next_q_values_online = self.qNetwork(batched_next_states.ndata['feat'])
-                    
-                    self.qTarget.g = batched_next_states
-                    next_q_values_target = self.qTarget(batched_next_states.ndata['feat'])
-                    
-                    next_action = next_q_values_online.argmax(dim=1, keepdim=True)
-                    next_q_values = next_q_values_target.gather(1, next_action)
-                else:
-                    self.qNetwork.g = batched_next_states
-                    all_next_q_values = self.qNetwork(batched_next_states.ndata['feat'])
-                    
-                    next_q_values = all_next_q_values.max(dim=1, keepdim=True)[0]
-                
-                target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
-
-            # 计算损失
-            # RL损失：主网络学习强化学习任务 loss_fn
-            rl_loss = self.loss_fn(target_q_values, predict_q_values) 
-            # 优化主网络
             self.optimizer.zero_grad()
             rl_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.qNetwork.parameters(), 0.5)  
             self.optimizer.step()
+            
             if self.scheduler is not None:
                 self.scheduler.step()
             lr = self.scheduler.get_last_lr()[0] if self.scheduler is not None else self.alpha
-            # 记录损失
+            
             earth.loss.append([rl_loss.item(), sat.env.now])
             earth.trains.append([sat.env.now])
             
+            # 2. Distillation Step
+            distill_loss_val = 0.0
             if self.step > 24000:
-                pd_graph = batched_states.local_var() # 创建一个新的图，然后在这个图上进行操作，避免修改原始图，添加新属性不影响原图
-                # 将batched_states图中除了is_center和is_first_order节点特征外的其他特征设置为0
-                # 修复 KeyError: 'pdfeat' 并优化性能
-                keep_mask = pd_graph.ndata['is_center'] | pd_graph.ndata['is_first_order']
-                # 扩展 mask 维度以匹配 feat (N, D)
-                mask_expanded = keep_mask.unsqueeze(1).float()
+                distill_loss = self._compute_distillation_loss(batched_states, current_q_values)
+                distill_loss_val = distill_loss.item()
                 
-                pd_graph.ndata['pdfeat'] = pd_graph.ndata['feat'] * mask_expanded
-                
-                self.sNetwork.train()
-                self.sNetwork.g = pd_graph
-                student_q_values = self.sNetwork(pd_graph.ndata['pdfeat'])
-                
-                if self.distillationLossFun == 'KL':
-                    distill_loss = self.distillation_loss_fn(student_q_values, current_q_values.detach(), temperature=5.0)
-                elif self.distillationLossFun == 'KL_v2':
-                    distill_loss = self.distillation_loss_fn(student_q_values, current_q_values.detach(), temperature=5.0)
-                else:
-                    distill_loss = self.distillation_loss_fn(current_q_values.detach(), student_q_values)
-
-                # 优化学生网络（蒸馏任务）
                 self.student_optimizer.zero_grad()
                 distill_loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.sNetwork.parameters(), 0.5)  
                 self.student_optimizer.step()
 
-            # SwanLab日志记录
-            
-                if hasattr(self, 'swanlab_initialized') and self.swanlab_initialized:
-                    info = {
-                        "RLloss": rl_loss.item(),
-                        "DistillLoss": distill_loss.item(),
-                        "learning_rate": lr,
-                        "predictQ": target_q_values.mean().item(),
-                        # "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
-                        "simulation_time": sat.env.now
-                    }
-                    swanlab.log(info)
-            
-            else:
-                if hasattr(self, 'swanlab_initialized') and self.swanlab_initialized:
-                    info = {
-                        "RLloss": rl_loss.item(),
-                        "learning_rate": lr,
-                        "predictQ": target_q_values.mean().item(),
-                        # "epsilon": self.epsilon[-1][0] if self.epsilon else 0.0,
-                        "simulation_time": sat.env.now
-                    }
-                    swanlab.log(info)
+            # 3. Logging
+            if hasattr(self, 'swanlab_initialized') and self.swanlab_initialized:
+                info = {
+                    "RLloss": rl_loss.item(),
+                    "learning_rate": lr,
+                    "predictQ": target_q_values.mean().item(),
+                    "simulation_time": sat.env.now
+                }
+                if self.step > 24000:
+                    info["DistillLoss"] = distill_loss_val
+                swanlab.log(info)
             
         return 
 

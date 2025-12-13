@@ -548,7 +548,9 @@ if __name__ == '__main__':
         os.makedirs(outputPath, exist_ok=True) 
         sys.stdout = Logger(outputPath + 'logfile.log')
     else:
-        outputPath      = current_dir + '/ResultsV2/Policy Distillation/2025-10-24/15-16-08_Starlink_[3.0]s_lr_0.0001_GTs_[2] copy 2/'
+        # outputPath      = current_dir + '/ResultsV2/Policy Distillation/2025-10-24/15-16-08_Starlink_[3.0]s_lr_0.0001_GTs_[2] copy 2/'
+        outputPath      = current_dir + '/ResultsV2/GNNPD/2025-12-02/15-58-50_Starlink_[3.0]s_lr_0.0002_GTs_[2]_teacher2'
+
         populationMap   = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
         print('outputPath: ' + outputPath)
         sys.stdout = Logger(outputPath + 'logfile.log')

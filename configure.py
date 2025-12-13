@@ -5,7 +5,7 @@
 pathings    = ['hop', 'dataRate', 'dataRateOG', 'slant_range', 'Q-Learning', 'Deep Q-Learning', 'Policy Distillation', 'GNNPD']
 pathing     = pathings[7]# dataRateOG is the original datarate. If we want to maximize the datarate we have to use dataRate, which is the inverse of the datarate
 
-GTs = [4]               # number of gateways to be tested
+GTs = [2]               # number of gateways to be tested
 # Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
 # GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
 
@@ -96,7 +96,7 @@ diff        = True          # If up, the state space gives no coordinates about 
 diff_lastHop= True          # If up, this state is the same as diff, but it includes the last hop where the block was in order to avoid loops
 reducedState= False         # if set to true the DNN will receive as input only the positional information, but not the queueing information
 third_adj    = True          # If up, the state space includes the 3rd order neighbors information
-n_order_adj = 4   
+n_order_adj = 4             # Order of the neighbors to be included in the subgraph state representation
 notAvail    = 0             # this value is set in the state space when the satellite neighbour is not available
 infQueue    = 5000      # Upper boundary from where a queue is considered as infinite when obserbing the state
 queueVals   = 10        # Values that the observed Queue can have, being 0 the best (Queue of 0) and max the worst (Huge queue or inexistent link).

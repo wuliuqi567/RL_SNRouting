@@ -8,7 +8,7 @@ import os
 import socket
 import time
 from pathlib import Path
-from Class.experienceReplay import ExperienceReplay
+from Algorithm.common.experienceReplay import ExperienceReplay
 from configure import *
 from Utils.utilsfunction import *
 from Utils.statefunction import *

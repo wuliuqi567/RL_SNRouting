@@ -134,7 +134,7 @@ def get_3rd_order_neighbors(sat, g, earth):
 
 
 # for DDQNAgent
-def getDeepLinkedSats(satA, g, earth):
+def getDeepLinkedSats(satA, g=None, earth=None):
     '''
     Given a satellite, this function will return a dictionary with the linked satellite
     at each direction based on the new definition of upper and lower satellites.
@@ -507,7 +507,7 @@ def obtain_1rd_neighbor_info(block, sat, g, earth):
 # 
 # 然后获取每个节点的队列位置属性添加到图dglsatsub中，最后再获取节点和边的状态。
 
-def get_subgraph_state(block, sat, g, earth):
+def get_subgraph_state(block, sat, g, earth, n_order=4):
     """
     Generates the subgraph state for the current satellite using an n-order ego graph.
 
@@ -528,8 +528,8 @@ def get_subgraph_state(block, sat, g, earth):
             - edata['weight']: Edge features tensor of shape (E, 2), containing normalized
               slant range and data rate.
     """
-    # 获取n阶子图
-    n_order = 4
+    # # 获取n阶子图
+    # n_order = 4
     
     # 手动实现 ego_graph 的逻辑以避免 deepcopy
     
@@ -633,5 +633,20 @@ def get_subgraph_state(block, sat, g, earth):
     if features:
         # np.vstack 将列表堆叠成 (N, D)
         dgl_g.ndata['feat'] = torch.tensor(np.vstack(features), dtype=torch.float32)
+        dgl_g.ndata['1st_order_feat'] = dgl_g.ndata['feat'] * (dgl_g.ndata['is_center'] | dgl_g.ndata['is_first_order']).unsqueeze(1).float()
 
     return dgl_g
+
+# def get_1st_order_neighbors(dgl_graph):
+#     """
+#     Get the 1st order neighbors of the center satellite in the DGL graph.
+#     # 将dgl_graph图中除了is_center和is_first_order节点特征外的其他特征设置为0
+#     """
+#     first_order_g = dgl_graph.local_var()
+#     keep_mask = first_order_g.ndata['is_center'] | first_order_g.ndata['is_first_order']
+#     # 扩展 mask 维度以匹配 feat (N, D)
+#     mask_expanded = keep_mask.unsqueeze(1).float()
+    
+#     first_order_g.ndata['pdfeat'] = first_order_g.ndata['feat'] * mask_expanded
+
+#     return first_order_g

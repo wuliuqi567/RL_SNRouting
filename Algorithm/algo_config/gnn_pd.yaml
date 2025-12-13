@@ -1,0 +1,63 @@
+
+# base config
+agent: 'GNN_PD'
+seed : 42
+logger: 'swanlab' # options: 'wandb', 'tensorboard', 'swanlab'
+wandb_user_name: "wmqbit"
+log_dir: './Algorithm/GNN_PD/logs'
+model_dir: './Algorithm/GNN_PD/models'
+
+device: "cuda:0"
+
+# environment parameters
+n_order_adj: 4 # number of order for adjacency matrix
+action_size: 4 # number of possible actions
+input_dim: 10 # dimension of input each node features
+
+# agent hyperparameters
+## model parameters
+
+### GNN parameters
+num_heads: 2
+num_layers: 3
+project_dim: -1
+num_hidden: 24
+in_drop: 0.25
+attn_drop: 0.25
+edge_drop: 0.1
+clip: 1.0
+alpha: 0.15
+hop_num: 3
+p_norm: 0.0
+layer_norm: True
+feed_forward: True
+# save_path: './MAGNA-models/'
+weight_decay: 1e-5
+negative_slope: 0.2
+self_loop: 1
+head_tail_shared: 1
+# random_seed: 42
+
+pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
+
+
+## replay buffer parameters
+buffer_size: 100000
+
+batch_size   : 128        # batchSize samples are taken from bufferSize samples to train the network
+
+
+## training parameters
+train_TA_model: True # whether to train the teacher agent network
+use_student_network: False # whether to use the student network for action selection
+tau         : 0.01       # rate of copying the weights from the Q-Network to the target network
+MAX_EPSILON : 0.99      # Maximum value that the exploration parameter can have
+MIN_EPSILON : 0.001     # Minimum value that the exploration parameter can have
+LAMBDA      : 0.0005   # This value is used to decay the epsilon in the deep learning implementation
+decayRate   : 30    # Decay rate for epsilon decay in deep learning implementation
+
+updateF     : 2800      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
+gamma: 0.99
+
+nTrain      : 120         # The teacher network will train every nTrain steps
+
