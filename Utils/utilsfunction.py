@@ -1,9 +1,10 @@
-import math
+import math, os, time
 import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
 import pandas as pd
-from configure import *
+from system_configure import *
+from globalvar import *
 from Class.auxiliaryClass import *
 from Class.orbitalPlane import OrbitalPlane
 from Class.edge import edge
@@ -26,8 +27,6 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     pathBlocks  = [[],[]]
     first       = earth.gateways[0]
     second      = earth.gateways[1]
-
-    earth.pathParam
 
     for block in receivedDataBlocks: # 
         time = block.getTotalTransmissionTime()
@@ -882,7 +881,7 @@ def create_Constellation(specific_constellation, env, earth):
 #         return -1
 #     return path
 
-def getShortestPath(source, destination, weight, g):
+def getShortestPath(source, destination, g):
     '''
     Gives you the shortest path between a source and a destination and plots it if desired.
     Uses the 'dijkstra' algorithm to compute the sortest path, where the total weight of the path can be either the sum of inverse
@@ -893,7 +892,7 @@ def getShortestPath(source, destination, weight, g):
 
     path = []
     try:
-        shortest = nx.shortest_path(g, source, destination, weight = weight)    # computes the shortest path [dataRate, slant_range, hops]
+        shortest = nx.shortest_path(g, source, destination, weight = 'dataRate')    # computes the shortest path [dataRate, slant_range, hops]
         for hop in shortest:                                                    # pre process the data so it can be used in the future
             # key = list(g.nodes[hop])[0]
             if shortest.index(hop) == 0 or shortest.index(hop) == len(shortest)-1:

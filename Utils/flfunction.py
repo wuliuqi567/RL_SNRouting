@@ -9,7 +9,7 @@ from datetime import datetime
 import time
 import torch
 from Utils.logger import Logger
-from configure import *
+from system_configure import *
 from globalvar import *
 from Utils.utilsfunction import *
 

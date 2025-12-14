@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from configure import *
+from system_configure import *
 from globalvar import *
 from Class.auxiliaryClass import Results, BlocksForPickle
 import os
@@ -94,7 +94,7 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     first       = earth.gateways[0]
     second      = earth.gateways[1]
 
-    earth.pathParam
+    # earth.pathParam
 
     for block in receivedDataBlocks: # 
         time = block.getTotalTransmissionTime()

@@ -1,19 +1,3 @@
-
-# base config
-agent: 'GNN_PD'
-seed : 42
-logger: 'swanlab' # options: 'wandb', 'tensorboard', 'swanlab'
-wandb_user_name: "wmqbit"
-log_dir: './Algorithm/GNN_PD/logs'
-model_dir: './Algorithm/GNN_PD/models'
-
-device: "cuda:0"
-
-# environment parameters
-n_order_adj: 4 # number of order for adjacency matrix
-action_size: 4 # number of possible actions
-input_dim: 10 # dimension of input each node features
-
 # agent hyperparameters
 ## model parameters
 
@@ -48,8 +32,7 @@ batch_size   : 128        # batchSize samples are taken from bufferSize samples 
 
 
 ## training parameters
-train_TA_model: True # whether to train the teacher agent network
-use_student_network: False # whether to use the student network for action selection
+
 tau         : 0.01       # rate of copying the weights from the Q-Network to the target network
 MAX_EPSILON : 0.99      # Maximum value that the exploration parameter can have
 MIN_EPSILON : 0.001     # Minimum value that the exploration parameter can have
@@ -61,3 +44,7 @@ gamma: 0.99
 
 nTrain      : 120         # The teacher network will train every nTrain steps
 
+learning_rate: 0.002
+lr_decay_steps: 10000000
+student_learning_rate: 0.00005
+student_lr_decay_steps: 10000000

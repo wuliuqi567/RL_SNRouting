@@ -14,11 +14,11 @@ from argparse import Namespace
 class BaseAgent(ABC):
     def __init__(self, config: Namespace):
         self.config = config
+        outputPath = config.outputPath
+        seed = f"seed_{self.config.seed}"
 
-        seed = f"seed_{self.config.seed}_"
-        self.model_dir_load = config.model_dir
         time_string = get_time_string()
-        self.model_dir_save = os.path.join(os.getcwd(), config.model_dir, seed + time_string)
+        self.model_dir_save = os.path.join(outputPath, config.model_dir + seed)
         
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
@@ -28,11 +28,11 @@ class BaseAgent(ABC):
         # Prepare necessary components.
         self.policy = None
         self.learner = None
-        self.memory = ExperienceReplay(config.memory_size)
+        self.memory = ExperienceReplay(config.buffer_size)
 
         # Create logger.
         if config.logger == "tensorboard":
-            log_dir = os.path.join(os.getcwd(), config.log_dir, seed + time_string)
+            log_dir = os.path.join(outputPath, config.log_dir + seed)
             if not os.path.exists(log_dir):
                 create_directory(log_dir)
 
@@ -40,8 +40,8 @@ class BaseAgent(ABC):
             self.use_wandb = False
         elif config.logger == "wandb":
             config_dict = vars(config)
-            log_dir = config.log_dir
-            wandb_dir = Path(os.path.join(os.getcwd(), config.log_dir))
+            log_dir = os.path.join(outputPath, config.log_dir + seed)
+            wandb_dir = Path(os.path.join(outputPath, config.log_dir + seed))
             if not os.path.exists(wandb_dir):
                 create_directory(str(wandb_dir))
 
@@ -80,10 +80,6 @@ class BaseAgent(ABC):
         raise NotImplementedError("Subclasses must implement this method")
     
     # @abstractmethod
-    # def getNextHop(self, block, sat, *args):
-    #     raise NotImplementedError("Subclasses must implement this method")
-    
-    @abstractmethod
     def store_experience(self, *args, **kwargs):
         raise NotImplementedError
 
@@ -92,28 +88,12 @@ class BaseAgent(ABC):
         if not os.path.exists(self.model_dir_save):
             os.makedirs(self.model_dir_save)
         model_path = os.path.join(self.model_dir_save, model_name)
-        self.learner.save_model(model_path)
-        # save the observation status
-        if self.use_obsnorm:
-            obs_norm_path = os.path.join(self.model_dir_save, "obs_rms.npy")
-            observation_stat = {'count': self.obs_rms.count,
-                                'mean': self.obs_rms.mean,
-                                'var': self.obs_rms.var}
-            np.save(obs_norm_path, observation_stat)
+        torch.save(self.policy.state_dict(), model_path)
 
-    def load_model(self, path, model=None):
+    def load_model(self, model_name):
         # load neural networks
-        path_loaded = self.learner.load_model(path, model)
-        # recover observation status
-        if self.use_obsnorm:
-            obs_norm_path = os.path.join(path_loaded, "obs_rms.npy")
-            if os.path.exists(obs_norm_path):
-                observation_stat = np.load(obs_norm_path, allow_pickle=True).item()
-                self.obs_rms.count = observation_stat['count']
-                self.obs_rms.mean = observation_stat['mean']
-                self.obs_rms.var = observation_stat['var']
-            else:
-                raise RuntimeError(f"Failed to load observation status file 'obs_rms.npy' from {obs_norm_path}!")
+        model_path = os.path.join(self.model_dir_save, model_name)
+        self.policy.load_state_dict(torch.load(model_path, map_location=self.device))
 
     def log_infos(self, info: dict, x_index: int):
         """

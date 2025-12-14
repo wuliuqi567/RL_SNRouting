@@ -1,9 +1,7 @@
 import math
-import os
 import numpy as np
 import simpy
-import networkx as nx
-from configure import *
+from system_configure import *
 from globalvar import *
 from Class.auxiliaryClass import *
 
@@ -114,8 +112,10 @@ class Satellite:
         self.sendBlocksSatsInter = []
         self.newBuffer  = [False]
 
-        self.QLearning  = None  # Q-learning table that will be updated in case the pathing is 'Q-Learning'
-        self.DDQNA      = None  # DDQN agent for each satellite. Only used in the online phase
+        # self.QLearning  = None  # Q-learning table that will be updated in case the pathing is 'Q-Learning'
+        # self.DDQNA      = None  # DDQN agent for each satellite. Only used in the online phase
+        self.agent = self.orbPlane.earth.agent
+
         self.maxSlantRange = self.GetmaxSlantRange()
 
     def GetmaxSlantRange(self):
@@ -215,41 +215,45 @@ class Satellite:
         # Compute the next hop in the path and add it to the second last position (Last is the destination gateway)
         # we let the (Deep) Q-model choose the next hop and it will be added to the block.QPath as mentioned
         # if the next hop is the linked gateway it will simply not add anything and will let the model work normally
-        if ((self.QLearning) or (self.orbPlane.earth.DDQNA is not None) or (self.DDQNA is not None)):
+        # if ((self.QLearning) or (self.orbPlane.earth.DDQNA is not None) or (self.DDQNA is not None)):
+        #     if len(block.QPath) > 3: # the block does not come from a gateway
+        #         if self.QLearning:
+        #             nextHop = self.QLearning.makeAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
+        #         elif self.DDQNA:
+        #             nextHop = self.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
+        #         else:
+        #             nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
+        #     else:
+        #         if self.QLearning:
+        #             nextHop = self.QLearning.makeAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
+        #         elif self.DDQNA:
+        #             nextHop = self.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
+        #         else:
+        #             nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
+        if self.agent is not None:
             if len(block.QPath) > 3: # the block does not come from a gateway
-                if self.QLearning:
-                    nextHop = self.QLearning.makeAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
-                elif self.DDQNA:
-                    nextHop = self.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
-                else:
-                    nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
+                nextHop = self.agent.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
             else:
-                if self.QLearning:
-                    nextHop = self.QLearning.makeAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
-                elif self.DDQNA:
-                    nextHop = self.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
-                else:
-                    nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
-
+                nextHop = self.agent.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
             if nextHop == -1:
                 # exceed max hops, drop the block
                 dropBlocks.append(block)
                 return
             elif nextHop != 0:
                 block.QPath.insert(len(block.QPath)-1 ,nextHop)
-                pathPlot = block.QPath.copy()
-                pathPlot.pop()
-            else:
-                pathPlot = block.QPath.copy()
+                # pathPlot = block.QPath.copy()
+                # pathPlot.pop()
+            # else:
+                # pathPlot = block.QPath.copy()
             
             # If plotPath plots an image for every action taken. Plots 1/10 of blocks. # ANCHOR plot action satellite
             #################################################################
-            if self.orbPlane.earth.plotPaths:
-                if int(block.ID[len(block.ID)-1]) == 0:
-                    os.makedirs(self.orbPlane.earth.outputPath + '/pictures/', exist_ok=True) # create output path
-                    outputPath = self.orbPlane.earth.outputPath + '/pictures/' + block.ID + '_' + str(len(block.QPath)) + '_'
-                    # plotShortestPath(self.orbPlane.earth, pathPlot, outputPath)
-                    plotShortestPath(self.orbPlane.earth, pathPlot, outputPath, ID=block.ID, time = block.creationTime)
+            # if self.orbPlane.earth.plotPaths:
+            #     if int(block.ID[len(block.ID)-1]) == 0:
+            #         os.makedirs(self.orbPlane.earth.outputPath + '/pictures/', exist_ok=True) # create output path
+            #         outputPath = self.orbPlane.earth.outputPath + '/pictures/' + block.ID + '_' + str(len(block.QPath)) + '_'
+            #         # plotShortestPath(self.orbPlane.earth, pathPlot, outputPath)
+            #         plotShortestPath(self.orbPlane.earth, pathPlot, outputPath, ID=block.ID, time = block.creationTime)
             #################################################################
 
             path = block.QPath  # if there is Q-Learning the path will be repalced with the QPath

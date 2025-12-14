@@ -3,7 +3,7 @@ import os
 import numpy as np
 import simpy
 import networkx as nx
-from configure import *
+from system_configure import *
 from Utils.utilsfunction import *
 from globalvar import *
 import geopy.distance
@@ -131,7 +131,7 @@ class Gateway:
 
                     block.path = self.paths[destination.name]
 
-                    if self.earth.pathParam == 'Q-Learning' or self.earth.pathParam == 'Deep Q-Learning' or self.earth.pathParam == 'Policy Distillation' or self.earth.pathParam == 'GNNPD':
+                    if self.earth.agent is not None:
                         block.QPath = [block.path[0], block.path[1], block.path[len(block.path)-1]]
                         # We add a Qpath field for the Q-Learning case. Only source and destination will be added
                         # after that, every hop will be added at the second last position.

@@ -21,10 +21,10 @@ class BaseLearner(ABC):
             self.device = torch.device('cpu')
 
         # 优化器和损失函数
-        self.optimizer = Union[dict, list, Optional[torch.optim.Optimizer]] = None
-        self.scheduler = Union[dict, list, Optional[torch.optim.lr_scheduler.LinearLR]] = None
-        self.student_optimizer = Union[dict, list, Optional[torch.optim.Optimizer]] = None
-        self.student_scheduler = Union[dict, list, Optional[torch.optim.lr_scheduler.LinearLR]] = None
+        self.optimizer: Union[dict, list, Optional[torch.optim.Optimizer]] = None
+        self.scheduler: Union[dict, list, Optional[torch.optim.lr_scheduler.LinearLR]] = None
+        self.student_optimizer: Union[dict, list, Optional[torch.optim.Optimizer]] = None
+        self.student_scheduler: Union[dict, list, Optional[torch.optim.lr_scheduler.LinearLR]] = None
 
         self.loss_fn = nn.SmoothL1Loss()  # Huber损失对应PyTorch的SmoothL1Loss
 

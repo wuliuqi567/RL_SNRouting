@@ -1,0 +1,22 @@
+# base config
+agent: 'MHGNN' # 
+seed: 42
+logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
+project_name: "satNetEnv"
+wandb_user_name: "wmqbit"
+log_dir: 'logs'
+model_dir: 'models' # 前面不要加 / ./ 等
+
+device: "cuda:0"
+
+# environment parameters
+n_order_adj: 4 # number of order for adjacency matrix
+action_size: 4 # number of possible actions
+input_dim: 10 # dimension of input each node features
+
+# training parameters
+train_TA_model: true # whether to train the teacher agent network
+use_student_network: false # whether to use the student network for action selection
+
+outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/MHGNN/2025-12-14/15-11-27_Starlink_3.0s_GTs_[2]/train/'
+CurrentGTnumber: 2

@@ -3,7 +3,7 @@ import os
 import numpy as np
 import simpy
 import networkx as nx
-from configure import *
+from system_configure import *
 from Utils.utilsfunction import *
 from globalvar import *
 import geopy.distance

@@ -1,4 +1,4 @@
-from configure import *
+from system_configure import *
 
 class DataBlock:
     """

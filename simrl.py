@@ -11,15 +11,14 @@ import sys
 from Algorithm.agent.mhgnn_agent import MHGNNAgent
 from Utils.logger import Logger
 from Utils.utilsfunction import *
-from system_cofigure import *
+from system_configure import *
 from globalvar import *
 from Utils.plotfunction import *
 import gc
-import builtins
 from Class.earth import Earth
 from Class.auxiliaryClass import *
 
-
+from Algorithm.agent import REGISTRY_Agents
 
 def simProgress(simTimelimit, env):
     timeSteps = 100
@@ -35,7 +34,7 @@ def simProgress(simTimelimit, env):
         progress += 1
 
 
-def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementTime, totalLocations, outputPath, matching='Greedy'):
+def initialize(env, agent_class, popMapLocation, GTLocation, distance, inputParams, movementTime, totalLocations, outputPath, matching='Greedy'):
     """
     Initializes an instance of the earth with cells from a population map and gateways from a csv file.
     During initialisation, several steps are performed to prepare for simulation:
@@ -60,8 +59,14 @@ def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementT
         getRates = False
 
     # Load earth and gateways
-    earth = Earth(env, popMapLocation, GTLocation, constellationType, inputParams, movementTime, totalLocations, getRates, outputPath=outputPath)
-
+    earth = Earth(env, agent_class, popMapLocation, GTLocation, constellationType, inputParams, movementTime, totalLocations, getRates, outputPath=outputPath)
+    
+    # if algo == "global":
+    # earth.agent = agent_class()
+    # else:
+    #     for plane in earth.LEO:
+    #         for sat in plane.sats:
+    #             sat.agent = MHGNNAgent(config)
     print(earth)
     print()
 
@@ -80,7 +85,7 @@ def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementT
         for destination in earth.gateways:
             if GT != destination:
                 if destination.linkedSat[0] is not None and GT.linkedSat[0] is not None:
-                    path = getShortestPath(GT.name, destination.name, earth.pathParam, GT.graph)
+                    path = getShortestPath(GT.name, destination.name, GT.graph)
                     GT.paths[destination.name] = path
                     paths.append(path)
 
@@ -127,7 +132,7 @@ def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementT
                         break
 
     bottleneck2, minimum2 = findBottleneck(paths[1], earth, False)
-    bottleneck1, minimum1 = findBottleneck(paths[0], earth, False, minimum2)
+    bottleneck1, _ = findBottleneck(paths[0], earth, False, minimum2)
 
     print('Traffic generated per GT (totalAvgFlow per Milliard):')
     print('----------------------------------')
@@ -144,17 +149,12 @@ def initialize(env, popMapLocation, GTLocation, distance, inputParams, movementT
                 GT.getTotalFlow(1, "Step", 1, GT.linkedSat[1].downRate, fraction)  # using data rate of the GSL downlink
     print('----------------------------------')
 
-    # if algo == "global":
-    earth.agent = MHGNNAgent()
-    # else:
-    #     for plane in earth.LEO:
-    #         for sat in plane.sats:
-    #             sat.agent = MHGNNAgent(config)
+
 
     return earth, graph, bottleneck1, bottleneck2
 
 
-def RunSimulation(GTs, outputPath, radioKM):
+def RunSimulation(GTs, outputPath, agent_class, radioKM):
     start_time = datetime.now()
     '''
     this is required for the bar plot at the end of the simulation
@@ -176,14 +176,6 @@ def RunSimulation(GTs, outputPath, radioKM):
 
     for GTnumber in GTs:
         global CurrentGTnumber
-        global Train
-        global TrainThis
-        global nnpath
-        if FL_Test:
-            global CKA_Values
-        if ddqn:
-            global nnpathTarget
-        TrainThis       = Train
         CurrentGTnumber = GTnumber
         
         if len(GTs)>1:
@@ -205,16 +197,29 @@ def RunSimulation(GTs, outputPath, radioKM):
         print(f'Movement Time: {movementTime}')
 
 
-        earth1, _, _, _ = initialize(env, populationDataDir, './Gateways.csv', radioKM, inputParams, movementTime, locations, outputPath, matching=matching)
+        earth1, _, _, _ = initialize(env, agent_class, populationDataDir, './Gateways.csv', radioKM, inputParams, movementTime, locations, outputPath, matching=matching)
         earth1.outputPath = outputPath
         
 
-# run the simulation
+        # run the simulation
         env.process(simProgress(simulationTimelimit, env))
         startTime = time.time()
         env.run(simulationTimelimit)
         timeToSim = time.time() - startTime
 
+        # save learnt values
+        if earth1.agent is not None:
+            earth1.agent.try_save_model()
+        
+        # for plane in earth1.LEO:
+        #     for sat in plane.sats:
+        #         qTable = sat.QLearning.qTable
+        #         with open(path + sat.ID + '.npy', 'wb') as f:
+        #             np.save(f, qTable)
+
+        # plotting and saving results
+        print('Simulation time: {} seconds'.format(round(timeToSim, 2)))
+        print('----------------------------------')
         if testType == "Rates":
             plotRatesFigures()
         else:
@@ -240,16 +245,7 @@ def RunSimulation(GTs, outputPath, radioKM):
         # print('Plotting link congestion figures...')
         # plotCongestionMap(earth1, np.asarray(blocks), outputPath + '/Congestion_Test/', GTnumber, plot_separately=plotAllCon)
 
-        # save learnt values
-
-        earth1.agent.save_model(model_name='model.pth')
         
-        # for plane in earth1.LEO:
-        #     for sat in plane.sats:
-        #         qTable = sat.QLearning.qTable
-        #         with open(path + sat.ID + '.npy', 'wb') as f:
-        #             np.save(f, qTable)
-
 
         # percentages.clear()
         receivedDataBlocks  .clear()
@@ -288,21 +284,65 @@ def RunSimulation(GTs, outputPath, radioKM):
     print('----------------------------------')
 
 
+import yaml
+
+def get_configs():
+    """Get dict variable from a YAML file.
+    Args:
+        file_dir: the directory of the YAML file.
+
+    Returns:
+        config_dict: the keys and corresponding values in the YAML file.
+    """
+    base_config_file_dir = "./Algorithm/algo_config/base_config.yaml"
+    with open(base_config_file_dir, "r") as f:
+        try:
+            base_config_dict = yaml.load(f, Loader=yaml.FullLoader)
+        except yaml.YAMLError as exc:
+            assert False, base_config_file_dir + " error: {}".format(exc)
+    return base_config_dict
+
 if __name__ == '__main__':
     import os
+    from ruamel.yaml import YAML
 
+    yaml_ruamel = YAML()
+    yaml_ruamel.preserve_quotes = True
+    yaml_ruamel.indent(mapping=2, sequence=4, offset=2)
+    
+    config_file = "./Algorithm/algo_config/base_config.yaml"
+    test_outputPath = "./SimResults/TestRun/"
+    with open(config_file, "r") as f:
+        config_data = yaml_ruamel.load(f)
+    
+    agent_name = config_data['agent']
+    if agent_name in REGISTRY_Agents:
+        agent_class = REGISTRY_Agents[agent_name]
+    
     current_dir = os.getcwd()
-
-    filetime_ymd = datetime.now().strftime("%Y-%m-%d")
-    filetime_hms = datetime.now().strftime("%H-%M-%S")
-    data_inputrl = pd.read_csv("inputRL.csv")
-    constellation = data_inputrl['Constellation'][0]
-    sim_time = data_inputrl['Test length'][0]
-
-    outputPath      = current_dir + '/SimResults/{}/{}_{}_[{}]s_GTs_{}/'.format(filetime_ymd, filetime_hms, constellation, sim_time, GTs)
-    os.makedirs(outputPath, exist_ok=True) 
+    if config_data["train_TA_model"]:
+        
+        filetime_ymd = datetime.now().strftime("%Y-%m-%d")
+        filetime_hms = datetime.now().strftime("%H-%M-%S")
+        data_inputrl = pd.read_csv("inputRL.csv")
+        constellation = data_inputrl['Constellation'][0]
+        sim_time = data_inputrl['Test length'][0]
+        outputPath      = current_dir + f'/SimResults/{agent_name}/{filetime_ymd}/{filetime_hms}_{constellation}_{sim_time}s_GTs_{GTs}/train/'
+        os.makedirs(outputPath, exist_ok=True) 
+    else:
+        if config_data['use_student_network']:
+            outputPath = os.path.join()(current_dir, test_outputPath + 'student_network/')
+        else:
+            outputPath = os.path.join()(current_dir, test_outputPath + 'teacher_network/')
+            os.makedirs(outputPath, exist_ok=True)
     sys.stdout = Logger(outputPath + 'logfile.log')
 
+    config_data['outputPath'] = outputPath
+    config_data['CurrentGTnumber'] = GTs[0]
 
-    RunSimulation(GTs,  outputPath, radioKM=rKM)
+    with open(config_file, "w") as f:
+        yaml_ruamel.dump(config_data, f)
+            
+
+    RunSimulation(GTs, outputPath, agent_class, radioKM=rKM)
     # cProfile.run("RunSimulation(GTs, './', outputPath, populationMap, radioKM=rKM)")

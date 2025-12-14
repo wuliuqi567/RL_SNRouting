@@ -1,14 +1,16 @@
 
 from argparse import Namespace
 from copy import deepcopy
-from torch import Module
+from torch.nn import Module
 import torch
+import numpy as np
+import os
 
 from Utils.utilsfunction import *
 from Utils.statefunction import *
 from .base_agent import BaseAgent
-from GNNmodel.MAGNA_model import MAGNA
-from learner.mhgnnddqn_learner import MHGNNDDQNLearner
+from Algorithm.GNNmodel.MAGNA_model import MAGNA
+from Algorithm.learner.mhgnnddqn_learner import MHGNNDDQNLearner
 from dgl import DGLGraph
 import dgl, random
 import argparse
@@ -22,17 +24,45 @@ def get_configs(file_dir):
     Returns:
         config_dict: the keys and corresponding values in the YAML file.
     """
-    with open(file_dir, "r") as f:
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    base_config_file_dir = os.path.join(current_dir, "../algo_config/base_config.yaml")
+    
+    with open(base_config_file_dir, "r") as f:
+        try:
+            base_config_dict = yaml.load(f, Loader=yaml.FullLoader)
+        except yaml.YAMLError as exc:
+            assert False, base_config_file_dir + " error: {}".format(exc)
+
+    # file_dir is passed as relative path like "../algo_config/gnn_pd.yaml"
+    # We assume it is relative to this file (mhgnn_agent.py)
+    config_file_path = os.path.join(current_dir, file_dir)
+    
+    with open(config_file_path, "r") as f:
         try:
             config_dict = yaml.load(f, Loader=yaml.FullLoader)
+            config_dict.update(base_config_dict)
         except yaml.YAMLError as exc:
-            assert False, file_dir + " error: {}".format(exc)
+            assert False, config_file_path + " error: {}".format(exc)
     return config_dict
+
+def save_configs(configs_dict, save_path):
+    """Save dict variable to a YAML file.
+    Args:
+        configs_dict: the dict variable to be saved.
+        save_path: the directory to save the YAML file.
+    """
+    with open(save_path, "w") as f:
+        try:
+            yaml.dump(configs_dict, f)
+        except yaml.YAMLError as exc:
+            assert False, save_path + " error: {}".format(exc)
+
 
 class MHGNNAgent(BaseAgent):
     def __init__(self):
         configs_dict = get_configs("../algo_config/gnn_pd.yaml")
         config = argparse.Namespace(**configs_dict)
+        # save_configs(configs_dict, os.path.join(config.outputPath, "configs_used.yaml"))
         super(MHGNNAgent, self).__init__(config)
         # Additional initialization for MHGNNAgent can be added here
         self.n_order_adj = config.n_order_adj
@@ -44,11 +74,14 @@ class MHGNNAgent(BaseAgent):
         # self.memory = self._build_memory()  # build memory
         self.train_TA_model = config.train_TA_model
         self.use_student_network = config.use_student_network
+        if not self.train_TA_model:
+            self.load_model()
 
         self.nTrain = config.nTrain
         self.step = 0
         self.updateF_count = 0
         self.updateF = config.updateF
+        self.epsilon = []
 
     def _build_policy(self) -> Module:
         
@@ -72,16 +105,13 @@ class MHGNNAgent(BaseAgent):
                 actIndex = random.randrange(self.actionSize)
                 action = self.actions[actIndex]
         else:            
-            if self.use_student_network:
-                self.policy.sNetwork.eval()
-            else:
-                self.policy.qNetwork.eval()
-
             with torch.no_grad():
                 if self.use_student_network:
+                    self.policy.sNetwork.eval()
                     self.policy.sNetwork.g = newState
                     qValues = self.policy.sNetwork(newState.ndata['1st_order_feat'])
                 else:
+                    self.policy.qNetwork.eval()
                     self.policy.qNetwork.g = newState
                     qValues = self.policy.qNetwork(newState.ndata['feat'])
             qValues = qValues.cpu().numpy().flatten()
@@ -107,53 +137,50 @@ class MHGNNAgent(BaseAgent):
         new_state_g_dgl = get_subgraph_state(block, sat, g, earth, n_order=self.n_order_adj)
         self.step += 1
 
-        # 1. Check for Max Hops Failure
-        if len(block.QPath) > 110:
-            if not (sat.linkedGT and block.destination.ID == sat.linkedGT.ID):
-                reward = self._calculate_reward_v1(block, sat, prevSat, g, earth, is_failure=True)
-                self._store_experience(block, reward, new_state_g_dgl, True, args, sat, earth)
-                if self.train_TA_model:
-                    self.log_infos_no_index(sum(block.stepReward) if block.stepReward else reward)
-                return -1
+        if not self.train_TA_model:
+            nextHop, actIndex = self.getNextHop(new_state_g_dgl, linkedSats, sat, earth)
+            if nextHop == -1:
+                return 0
+            else:
+                return nextHop
+        
+        # Determine status
+        is_failure = len(block.QPath) > 110 and not (sat.linkedGT and block.destination.ID == sat.linkedGT.ID)
+        is_terminal = sat.linkedGT and block.destination.ID == sat.linkedGT.ID
+        
+        if is_failure or is_terminal:
+            reward = self._calculate_reward_v1(block, sat, prevSat, is_terminal=is_terminal, is_failure=is_failure)
+            self.store_experience(block, reward, new_state_g_dgl, True, sat, earth)
+            self.log_infos_no_index({"Reward": sum(block.stepReward) if block.stepReward else reward})
+            return -1 if is_failure else 0
 
-        # 2. Check for Destination Arrival
-        if sat.linkedGT and block.destination.ID == sat.linkedGT.ID:
-            reward = self._calculate_reward_v1(block, sat, prevSat, g, earth, is_terminal=True)
-            self._store_experience(block, reward, new_state_g_dgl, True, args, sat, earth)
-            if self.train_TA_model:
-                self.log_infos_no_index(sum(block.stepReward) if block.stepReward else reward)
-            return 0
-
-        # 3. Select Action
+        # Select Action
         nextHop, actIndex = self.getNextHop(new_state_g_dgl, linkedSats, sat, earth)
-        if self.train_TA_model:
-            self.log_infos_no_index({"epsilon": self.epsilon[-1][0] if self.epsilon else 0.0})
+        self.log_infos_no_index({"epsilon": self.epsilon[-1][0] if self.epsilon else 0.0})
 
         if nextHop == -1:
             return 0
 
-        # 4. Intermediate Step Reward
-        reward = self._calculate_reward_v1(block, sat, prevSat, g, earth)
-        self._store_experience(block, reward, new_state_g_dgl, False, args, sat, earth)
+        # Intermediate Step Reward
+        if prevSat is not None:
+            reward = self._calculate_reward_v1(block, sat, prevSat)
+            self.store_experience(block, reward, new_state_g_dgl, False, sat, earth)
 
-        # 5. Train
-        if self.train_TA_model and self.step % self.nTrain == 0:
+        # Train
+        if self.step % self.nTrain == 0:
             self.train(sat, earth)
         
-        # 6. Update Target Network
-        if self.train_TA_model:
-            self.updateF_count += 1
-            if self.updateF_count == self.updateF:
-                self.policy.hard_update_target()
-                self.updateF_count = 0
-
+        self.updateF_count += 1
+        if self.updateF_count == self.updateF:
+            self.policy.hard_update_target()
+            self.updateF_count = 0
 
         block.oldState = new_state_g_dgl
         block.oldAction = actIndex
         return nextHop
 
     def train(self, sat, earth):
-        if len(self.memory) < self.config.batch_size:
+        if self.memory.buffeSize < self.config.batch_size:
             return
         samples = self.memory.getBatch(self.config.batch_size)
         info = self.learner.update(samples, self.step)
@@ -163,17 +190,11 @@ class MHGNNAgent(BaseAgent):
         earth.trains.append([sat.env.now])
         
 
-    def _store_experience(self, block, reward, new_state, is_terminal, args, sat, earth):
-        if not args:
-            block.stepReward.append(reward)
-        else:
-            if len(block.stepReward) > 0:
-                block.stepReward[-1] = reward
-            else:
-                block.stepReward.append(reward)
-        
+    def store_experience(self, block, reward, new_state, is_terminal, sat, earth):
+        block.stepReward.append(reward)
         self.memory.store(block.oldState, block.oldAction, reward, new_state, is_terminal)
-        earth.rewards.append([reward, sat.env.now])
+        if is_terminal:
+            earth.rewards.append([sum(block.stepReward), sat.env.now])
 
 
     def _calculate_reward_v1(self, block, sat, prevSat, is_terminal=False, is_failure=False):
@@ -187,38 +208,31 @@ class MHGNNAgent(BaseAgent):
                                  # 3: Distance reward normalized to maximum close up
                                  # 4: Distance reward normalized by max isl distance ~3.700 km for Kepler constellation. This is the one used in the papers.
                                  # 5: Only negative rewards proportional to traveled distance normalized by 1.000 km
-        
-        # Failure case (max hops exceeded)
-        if is_failure:
-            hop_penalty = -ArriveReward
-            satDest = block.destination.linkedSat[1]
-            distanceReward = getDistanceRewardV4(prevSat, sat, satDest, w2, w4)
-            queueReward = getQueueReward(block.queueTime[-1], w1)
-            return hop_penalty + distanceReward + queueReward
+        againPenalty= -10       # Penalty if the satellite sends the block to a hop where it has already been
 
-        # Success case (arrived at destination)
-        if is_terminal:
-            if distanceRew == 4:
-                satDest = block.destination.linkedSat[1]
-                distanceReward = getDistanceRewardV4(prevSat, sat, satDest, w2, w4)
-                queueReward = getQueueReward(block.queueTime[-1], w1)
-                return distanceReward + queueReward + ArriveReward
-            elif distanceRew == 5:
-                distanceReward = getDistanceRewardV5(prevSat, sat, w2)
-                return distanceReward + ArriveReward
-            else:
-                return ArriveReward
-        
-        # Intermediate Step Reward (Default case)
-        if distanceRew == 4:
-            satDest = block.destination.linkedSat[1]
-            distanceReward = getDistanceRewardV4(prevSat, sat, satDest, w2, w4)
+        satDest = block.destination.linkedSat[1]
+        if satDest is None:
+            print("No linked sat for destination GT")
+        if prevSat is None:
+            assert False, "Previous satellite is None in reward calculation."
+
+        queueReward = 0
+        if block.queueTime:
             queueReward = getQueueReward(block.queueTime[-1], w1)
-            return distanceReward + queueReward
-        elif distanceRew == 5:
-            return getDistanceRewardV5(prevSat, sat, w2)
+        distanceReward = getDistanceRewardV4(prevSat, sat, satDest, w2, w4)
+
+        if is_failure:
+            return distanceReward + queueReward - ArriveReward
+        if is_terminal:
+            return distanceReward + queueReward + ArriveReward
+        
+        hop = [sat.ID, math.degrees(sat.longitude), math.degrees(sat.latitude)]
+        if hop in block.QPath[:len(block.QPath)-2]:
+            again = againPenalty
         else:
-            return 0
+            again = 0
+        return distanceReward + queueReward + again
+
 
     def alignEpsilon(self, step, sat):
         maxEps = self.config.MAX_EPSILON
@@ -229,6 +243,31 @@ class MHGNNAgent(BaseAgent):
         epsilon = minEps + (maxEps - minEps) * math.exp(-LAMBDA * step / (decayRate * (CurrentGTnumber**2)))
         self.epsilon.append([epsilon, sat.env.now])
         return epsilon
+    
+    def save_model(self, model_name):
+        # save the neural networks
+        if not os.path.exists(self.model_dir_save):
+            os.makedirs(self.model_dir_save)
+        qNet_model_path = os.path.join(self.model_dir_save, 'qNet_' + model_name)
+        qTarget_model_path = os.path.join(self.model_dir_save, 'qTarget_' + model_name)
+        sNet_model_path = os.path.join(self.model_dir_save, 'sNet_' + model_name)
+        torch.save(self.policy.qNetwork.state_dict(), qNet_model_path)
+        torch.save(self.policy.qTarget.state_dict(), qTarget_model_path)
+        torch.save(self.policy.sNetwork.state_dict(), sNet_model_path)
+
+    def load_model(self):
+        # load neural networks
+        model_name = 'mhgnn_model.pth'
+        qNet_model_path = os.path.join(self.model_dir_save, 'qNet_' + model_name)
+        qTarget_model_path = os.path.join(self.model_dir_save, 'qTarget_' + model_name)
+        sNet_model_path = os.path.join(self.model_dir_save, 'sNet_' + model_name)
+        self.policy.qNetwork.load_state_dict(torch.load(qNet_model_path, map_location=self.device))
+        self.policy.qTarget.load_state_dict(torch.load(qTarget_model_path, map_location=self.device))
+        self.policy.sNetwork.load_state_dict(torch.load(sNet_model_path, map_location=self.device))
+
+    def try_save_model(self):
+        if self.train_TA_model:
+            self.save_model(model_name='mhgnn_model.pth')
 
 class MHGNNNetwork(Module):
     def __init__(self, config: Namespace):

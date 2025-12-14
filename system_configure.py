@@ -57,6 +57,14 @@ minElAngle  = 30        # For satellites. Value is taken from NGSO constellation
 mixLocs     = False     # If true, every time we make a new simulation the locations are going to change their order of selection
 rotateFirst = False     # If True, the constellation starts rotated by 1 movement defined by ndeltas
 GridSize    = 8         # Earth divided in GridSize rows for the grid. Used to be 15
+biggestDist = -1        # Normalization factor for the distance reward. This is updated in the creation of the graph.
+firstMove   = True      # The biggest slant range is only computed the first time in order to avoid this value to be variable
+
+
+# 2. Visualization & Logging
+plotAllThro = True      # If True, it plots throughput plots for each single path between gateways. If False, it plots a single figure for overall Throughput
+winSize     = 20        # window size for the representation in the plots
+markerSize  = 50        # Size of the markers in the plots
 
 # =============================================================================
 # 5. State Representation
