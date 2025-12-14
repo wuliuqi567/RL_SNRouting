@@ -9,7 +9,7 @@ import socket
 import time
 from pathlib import Path
 from Algorithm.common.experienceReplay import ExperienceReplay
-from configure import *
+from oldfile.configure import *
 from Utils.utilsfunction import *
 from Utils.statefunction import *
 import swanlab

@@ -7,7 +7,7 @@ import random
 import math
 import os
 from Algorithm.common.experienceReplay import ExperienceReplay
-from configure import *
+from oldfile.configure import *
 from Utils.utilsfunction import *
 from Utils.statefunction import *
 import swanlab
