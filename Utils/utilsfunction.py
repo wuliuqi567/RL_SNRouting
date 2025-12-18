@@ -4,6 +4,7 @@ import numpy as np
 import networkx as nx
 import pandas as pd
 from system_configure import *
+import system_configure
 from globalvar import *
 from Class.auxiliaryClass import *
 from Class.orbitalPlane import OrbitalPlane
@@ -58,8 +59,8 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     blockPath = outputPath + '/Congestion_Test/'     
     os.makedirs(blockPath, exist_ok=True)
     try:
-        global CurrentGTnumber
-        np.save("{}blocks_{}".format(blockPath, CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
+        # global CurrentGTnumber
+        np.save("{}blocks_{}".format(blockPath, system_configure.CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
     except pickle.PicklingError:
         print('Error with pickle and profiling')
 
@@ -89,19 +90,6 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
                       perTransLatency = sum(txLat)/totalTime*100)
 
     return results, allLatencies, pathBlocks, blocks
-
-def simProgress(simTimelimit, env):
-    timeSteps = 100
-    timeStepSize = simTimelimit/timeSteps
-    progress = 1
-    startTime = time.time()
-    yield env.timeout(timeStepSize)
-    while True:
-        elapsedTime = time.time() - startTime
-        estimatedTimeRemaining = elapsedTime * (timeSteps/progress) - elapsedTime
-        print("Simulation progress: {}% Estimated time remaining: {} seconds Current simulation time: {}".format(progress, int(estimatedTimeRemaining), env.now), end='\r')
-        yield env.timeout(timeStepSize)
-        progress += 1
 
 
 def get_direction(Satellites):
@@ -457,7 +445,7 @@ def positive_Grid_matching(earth):
             
     # Compute positions and slant ranges
     ##############################################################
-    direction       = get_direction(Satellites)             # get both directions of the satellites to use the two transceivers
+    # direction       = get_direction(Satellites)             # get both directions of the satellites to use the two transceivers
     Positions, meta = get_pos_vectors_omni(Satellites)      # position and plane of all the satellites
     slant_range     = get_slant_range_optimized(Positions, N)                       # matrix with all the distances between sat
     slant_range_los = los_slant_range(slant_range, meta, Max_slnt_rng, Positions)   # distance matrix but if d>dMax, d=infinite
@@ -488,9 +476,12 @@ def positive_Grid_matching(earth):
         # Add edges for east and west satellites
         if east:
             _A_Positive_Grid.append(edge(sat.ID, east.ID, east_distance, None, None, shannonRate[i, Satellites.index(east)]))
+        else:
+            print(f"[No Connection] Satellite {sat.ID} has no East Neighbor in Orbit {east_orbit}.")
         if west:
             _A_Positive_Grid.append(edge(sat.ID, west.ID, west_distance, None, None, shannonRate[i, Satellites.index(west)]))
-
+        else:
+            print(f"[No Connection] Satellite {sat.ID} has no West Neighbor in Orbit {west_orbit}.")
     # intra-plane ISL links (upper and lower neighbors)
     ##############################################################
     for plane in earth.LEO:
@@ -892,7 +883,7 @@ def getShortestPath(source, destination, g):
 
     path = []
     try:
-        shortest = nx.shortest_path(g, source, destination, weight = 'dataRate')    # computes the shortest path [dataRate, slant_range, hops]
+        shortest = nx.shortest_path(g, source, destination, weight = shortest_path_weight)    # computes the shortest path [dataRate, slant_range, hops]
         for hop in shortest:                                                    # pre process the data so it can be used in the future
             # key = list(g.nodes[hop])[0]
             if shortest.index(hop) == 0 or shortest.index(hop) == len(shortest)-1:

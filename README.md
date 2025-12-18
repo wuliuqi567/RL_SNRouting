@@ -3,12 +3,6 @@
 Contained in this repository is the code used for simulating data transmissions through satellite constellations and evaluating the latency results through post-processing of the data generated in the simulations.
 
 ## MA-DRL routing demonstration in a moving Kepler constellation from Malaga, Spain to Los Angeles, USA
-
-<!-- [![Demo Video](Video/MA-DRL_Movement_screenshot.png)](https://raw.githubusercontent.com/SatNEx-Malaga/MA-DRL_Routing_Simulator/main/Video/MA-DRL_Movement.mp4) -->
-[![Demo Video](Video/Demo.gif)](https://drive.google.com/file/d/1So7jtUwEdobJLzztXv6JmxP2B79PQDU0/preview)
-
-> Click the gif above to see the full demo video.
-
 The simulations are built using the event based discrete time simulation framework Simpy.
 
 
@@ -35,8 +29,6 @@ To set up the environment and install all required packages, follow these steps:
     ```sh
     pip install -r requirements.txt
     ```
-
-Make sure you have `Python 3.9` installed. It is recommended to use version 3.9.12.
 
 
 ## Description
@@ -79,66 +71,3 @@ The population maps used in the simulators are found at https://sedac.ciesin.col
 There is a guide to get the data from the population maps at https://towardsdatascience.com/visualising-global-population-datasets-with-python-c87bcfc8c6a6
 
 
-### Post-Processing
-
-Some post processing results can be found in `./Post-Processing/Post-Results.ipynb` notebook.
-
-## Contact me
-If you encounter any issues with the reproducibility of this simulator or would like to learn more about my research, please feel free to visit my [Google Scholar profile](https://scholar.google.es/citations?hl=es&user=6PZm2aYAAAAJ), contact me directly via email at flozano@ic.uma.es or open a new issue directly.
-
-## Citation
-
-If you use this work, please cite the following:
-
-### Full Paper ([IEEE TCOM](https://ieeexplore.ieee.org/document/10969776/))([Arxiv](https://arxiv.org/abs/2405.12308))
-
-```
-F. Lozano-Cuadra, B. Soret, I. Leyva-Mayorga and P. Popovski, "Continual Deep Reinforcement Learning for Decentralized Satellite Routing," in IEEE Transactions on Communications, doi: 10.1109/TCOMM.2025.3562522.
-```
-
-```
-@ARTICLE{10969776,
-  author={Lozano-Cuadra, Federico and Soret, Beatriz and Leyva-Mayorga, Israel and Popovski, Petar},
-  journal={IEEE Transactions on Communications}, 
-  title={Continual Deep Reinforcement Learning for Decentralized Satellite Routing}, 
-  year={2025},
-  volume={},
-  number={},
-  pages={1-1},
-  keywords={Routing;Satellites;Satellite broadcasting;Training;Knowledge engineering;Heuristic algorithms;Continuing education;Artificial neural networks;Q-learning;Predictive models},
-  doi={10.1109/TCOMM.2025.3562522}}
-```
-
-### Simulator Paper ([Zenodo](https://zenodo.org/records/13885645))
-
-```
-Lozano-Cuadra, F., Thorsager, M., Leyva-Mayorga, I., & Soret, B. (2024). An open source multi-agent deep reinforcement learning routing simulator for satellite networks. Proceedings of SPAICE2024: The First Joint European Space Agency / IAA Conference on AI in and for Space, 420–424. https://doi.org/10.5281/zenodo.13885645
-```
-
-```
-@INPROCEEDINGS{2024sais.conf..420L,
-       author = {{Lozano-Cuadra}, Federico and {Thorsager}, Mathias and {Leyva-Mayorga}, Israel and {Soret}, Beatriz},
-        title = "{An open source Multi-Agent Deep Reinforcement Learning Routing Simulator for satellite networks}",
-     keywords = {Reinforcement Learning, Satellite communications, Simulator, Python, Keras, AI, Routing},
-    booktitle = {Proceedings of SPAICE2024: The First Joint European Space Agency / IAA Conference on AI in and for Space},
-         year = 2024,
-       editor = {{Dold}, Dominik and {Hadjiivanov}, Alexander and {Izzo}, Dario},
-        month = oct,
-        pages = {420-424},
-          doi = {10.5281/zenodo.13885645},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2024sais.conf..420L},
-      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-}
-```
-
-
-## Known Issues
-The updateSatelliteProcessesRL() method in the SimulationRL.py file may not work correctly and this message can appear eventually:
-`ERROR! Sat nSat_NPlane tried to send block to nSat_NPlane but did not have it in its linked satellite list`
-Meaning that a satellite is trying to send a data block to an old neighbor, where the link between them has disappeared after the update of the constellation. The data block will be dropped, but this event can be ignored as long as it occurs infrequently, as it will not significantly impact the overall outcome of the simulation.
-
-The data generation at the gateways was not handled correctly causing too few data blocks to be generated. Instead of sending ((numberOfActive - 1) / (totalNumber - 1)) to each destination, ((numberOfActive - 1) / (totalNumber)) was sent. The code has been changed to generate the correct amount of data, so to reproduce results from the report, this must be changed back. The specific code is found in the "timeToFullBlock()" method in the Gateway class. This line currently reads: flow = self.totalAvgFlow / (len(self.totalLocations) - 1) (which is the correct behaviour) and should be changed to: flow = self.totalAvgFlow / (len(self.totalLocations)).
-
-Please report any additional issue you might have.
-
-This is the latest commit version of original project.

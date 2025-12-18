@@ -99,8 +99,8 @@ class MHGNNDDQNLearner(BaseLearner):
             distill_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.policy.sNetwork.parameters(), 0.5)
             self.student_optimizer.step()
-            if self.student_scheduler is not None:
-                self.student_scheduler.step()
+            # if self.student_scheduler is not None:
+            #     self.student_scheduler.step()
 
 
         # 7. 返回信息

@@ -2,7 +2,7 @@
 agent: 'MHGNN' # 
 seed: 42
 logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
-project_name: "satNetEnv"
+project_name: "satNetEnv2"
 wandb_user_name: "wmqbit"
 log_dir: 'logs'
 model_dir: 'models' # 前面不要加 / ./ 等
@@ -18,5 +18,5 @@ input_dim: 10 # dimension of input each node features
 train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
-outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/MHGNN/2025-12-14/15-11-27_Starlink_3.0s_GTs_[2]/train/'
+outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/MHGNN/2025-12-18/22-42-41_Starlink_3s_GTs_[2]/train/'
 CurrentGTnumber: 2

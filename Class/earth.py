@@ -1,9 +1,8 @@
 import math
-import os
 import numpy as np
-import simpy
 import networkx as nx
 from system_configure import *
+import system_configure
 from globalvar import *
 import geopy.distance
 from PIL import Image
@@ -11,7 +10,6 @@ import pandas as pd
 import time
 from Class.auxiliaryClass import *
 from Class.gateWay import Gateway
-from Algorithm.QLearning import QLearning
 from Utils.utilsfunction import *
 from Utils.flfunction import *
 from Utils.statefunction import *
@@ -24,7 +22,7 @@ from matplotlib.patches import FancyArrowPatch
 from matplotlib.colors import Normalize
 
 class Earth:
-    def __init__(self, env, agent_class, img_path, gt_path, constellation, inputParams, deltaT, totalLocations, getRates = False, window=None, outputPath='/'):
+    def __init__(self, env, agent_class, img_path, allGateWayInfo, constellation, deltaT, getRates = False, window=None, outputPath='/'):
         # Input the population count data
         # img_path = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
         self.outputPath = outputPath
@@ -33,7 +31,6 @@ class Earth:
         self.queues = []
         self.loss   = []
         self.lossAv = []
-        # self.DDQNA  = None
         self.agent = agent_class()
         self.step   = 0
         self.nMovs  = 0     # number of total movements done by the constellation
@@ -80,32 +77,15 @@ class Earth:
         # import gateways from .csv
         self.gateways = []
 
-        gateways = pd.read_csv(gt_path)
+        select_gateways_loc = allGateWayInfo['Location'].tolist()[:system_configure.CurrentGTnumber]
+        totalLocations = allGateWayInfo['Location'].tolist()
 
-        length = 0
-        for i, location in enumerate(gateways['Location']):
-            for name in inputParams['Locations']:
-                if name in location.split(","):
-                    length += 1
-
-        if inputParams['Locations'][0] != 'All':
-            for i, location in enumerate(gateways['Location']):
-                for name in inputParams['Locations']:
-                    if name in location.split(","):
-                        lName = gateways['Location'][i]
-                        gtLati = gateways['Latitude'][i]
-                        gtLongi = gateways['Longitude'][i]
-                        self.gateways.append(Gateway(lName, i, gtLati, gtLongi, self.total_x, self.total_y,
-                                                                   length, env, totalLocations, self))
-                        break
-        else:
-            for i in range(len(gateways['Latitude'])):
-                name = gateways['Location'][i]
-                gtLati = gateways['Latitude'][i]
-                gtLongi = gateways['Longitude'][i]
-                self.gateways.append(Gateway(name, i, gtLati, gtLongi, self.total_x, self.total_y,
-                                                           len(gateways['Latitude']), env, totalLocations, self))
-
+        for i in range(len(select_gateways_loc)):
+            name = allGateWayInfo['Location'][i]
+            gtLati = allGateWayInfo['Latitude'][i]
+            gtLongi = allGateWayInfo['Longitude'][i]
+            self.gateways.append(Gateway(name, i, gtLati, gtLongi, self.total_x, self.total_y,
+                                                        len(allGateWayInfo['Latitude']), env, totalLocations, self))
 
         # create data Blocks on all GTs.
         if not getRates:
@@ -121,7 +101,7 @@ class Earth:
                 constellation.rotate(ndeltas*deltaT)
 
         # Simpy process for handling moving the constellation and the satellites within the constellation
-        # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+        self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
 
     def set_window(self, window):  # function to change/set window for the earth
         """
@@ -237,6 +217,499 @@ class Earth:
                     interDataRates.append(satData[2])
         return interDataRates
 
+    def moveConstellation(self, env, deltaT=3600, getRates = False):
+        """
+        Simpy process function:
+
+        Moves the constellations in terms of the Earth's rotation and moves the satellites within the constellations.
+        The movement is based on the time that has passed since last constellation movement and is defined by the
+        "deltaT" variable.
+
+        After the satellites have been moved a process of re-linking all links, both GSLs and ISLs, is conducted where
+        the paths for all blocks are re-made, the blocks are moved (if necessary) to the correct buffers, and all
+        processes managing the send-buffers are checked to ensure they will still work correctly.
+        """
+
+        # Get the data rate for a intra plane ISL - used for testing
+        if getRates:
+            intraRate.append(self.LEO[0].sats[0].intraSats[0][2])
+
+        while True:
+            print('Creating/Moving constellation: Updating satellites position and links.')
+            if getRates:
+                # get data rates for all inter plane ISLs and all GSLs (up and down) - used for testing
+                upDataRates, downDataRates = self.getGSLDataRates()
+                inter = self.getISLDataRates()
+
+                for val in upDataRates:
+                    upGSLRates.append(val)
+
+                for val in downDataRates:
+                    downGSLRates.append(val)
+
+                for val in inter:
+                    interRates.append(val)
+
+            yield env.timeout(deltaT)
+
+            # clear satellite references on all GTs
+            for GT in self.gateways:
+                GT.satsOrdered = []
+                GT.linkedSat = (None, None)
+
+            # rotate constellation and satellites
+            for plane in self.LEO:
+                plane.rotate(ndeltas*deltaT)
+
+            # relink satellites and GTs
+            self.linkSats2GTs("Optimize")
+
+            # create new graph and add references to all GTs for every rotation
+            # prevGraph = self.graph
+            graph = createGraph(self, matching=matching)
+            self.graph = graph
+            for GT in self.gateways:
+                GT.graph = graph
+
+            if self.agent is not None:
+                self.updateSatelliteProcessesRL(graph)
+                # pass
+            else:
+                # self.updateSatelliteProcessesCorrect(graph)
+                print('No agent defined, skipping satellite process updates.')
+
+            self.updateGTPaths()
+            self.nMovs += 1
+            # if saveISLs:
+            #     print('Constellation moved! Saving ISLs map...')
+            #     islpath = self.outputPath + '/ISL_maps/'
+            #     os.makedirs(islpath, exist_ok=True) 
+            #     self.plotMap(plotGT = True, plotSat = True, edges=True, save = True, outputPath=islpath, n=self.nMovs)
+            #     plt.close()
+            print('***********Constellation moved! All satellite processes updated. \n'   )
+
+
+    def _process_buffer_rl(self, buffer, sat, buf_pos_flag=False):
+        """Helper function to process a buffer for RL path updates.
+        
+        buf_pos_flag: True: 发送到地面站的缓冲区， False: 发送到卫星的缓冲区
+
+        """
+        if buf_pos_flag:
+            # 如果是发送到地面站的缓冲区，假设数据包直接发往地面站，不进行RL决策
+            # 这里我们不需要做任何事情，因为数据包已经在正确的缓冲区中，
+            # 且后续逻辑会处理GSL的更新（如果连接的GT变了，updateSatelliteProcessesRL后续代码会处理）
+            return
+        index = 0
+        while index < len(buffer[1]):
+            block = buffer[1][index]
+            nextHop = None
+
+            def _step_id(step):
+                return step[0] if isinstance(step, (list, tuple)) else step
+
+            # Calculate next hop
+            if len(block.QPath) > 3:  # the block does not come from a gateway
+                if self.agent is not None:
+                    # If we couldn't determine prev_id but path is long, we might have an issue
+                    # But we'll try to proceed, maybe makeDeepAction can handle None or we can find it differently
+                    # prev_obj = findByID(self, prev_id) if prev_id is not None else None
+                    
+                    # UPDATE: Use current sat as prevSat to model the "wait" step, and remove 'recalculate' to append reward instead of overwrite
+                    nextHop = self.agent.makeDeepAction(block, sat, sat.orbPlane.earth.gateways[0].graph, self, sat)
+            else:
+                # Block is near start of path or short path
+                if self.agent is not None:
+                    print('len QPath <=3')
+                    # UPDATE: Use current sat as prevSat
+                    nextHop = self.agent.makeDeepAction(block, sat, sat.orbPlane.earth.gateways[0].graph, self, sat)
+
+            # Handle the result
+            if nextHop == -1:
+                # exceed max hops, drop the block
+                # should not happen
+                print('Exceed max hops, dropping block', block.ID, 'at satellite', sat.ID)
+
+            elif nextHop == -2:
+                # no available action, drop the block
+                # should not happen
+                print("No available action, dropping block", block.ID, "at satellite", sat.ID)
+
+            elif nextHop == 0:
+                # arrive at destination
+                block.QPath.pop(-2)
+                if sat.ID != block.QPath[-2]:
+                    print("Error: block should arrive at destination but nextHop is 0", block.QPath)
+                
+            elif isinstance(nextHop, list): #['18_20', -133.12012370027912, 42.210392220392556] dest.ID, longitude, latitude
+                # Keep QPath structure consistent with Class/satellite.py::receiveBlock
+                # - If block already had a next-hop chosen at this sat (buffered-to-send), QPath ends with: [..., sat, nextHop, dest]
+                #   -> update nextHop by replacing [-2]
+                # - If block has not yet chosen next-hop at this sat (shouldn't normally be in a send-buffer, but can happen
+                #   during movement/redistribution), QPath ends with: [..., sat, dest]
+                #   -> insert nextHop right before dest (same as receiveBlock)
+                if len(block.QPath) >= 2 and _step_id(block.QPath[-2]) == sat.ID:
+                    block.QPath.insert(len(block.QPath) - 1, nextHop)
+                elif len(block.QPath) >= 3 and _step_id(block.QPath[-3]) == sat.ID:
+                    block.QPath[-2] = nextHop
+                else:
+                    # Fallback: locate sat inside QPath and update/insert relative to that position.
+                    sat_index = None
+                    for i, step in enumerate(block.QPath):
+                        if _step_id(step) == sat.ID:
+                            sat_index = i
+                            break
+                    if sat_index is None:
+                        print(f"QPath error: sat {sat.ID} not in QPath for block {block.ID}: {block.QPath}")
+                    elif sat_index == len(block.QPath) - 2:
+                        block.QPath.insert(len(block.QPath) - 1, nextHop)
+                    elif sat_index + 1 < len(block.QPath) - 1:
+                        block.QPath[sat_index + 1] = nextHop
+                    else:
+                        print(f"QPath error: unexpected sat index for block {block.ID} on sat {sat.ID}: {block.QPath}")
+            else:
+                print("Error unknown nextHop type in receiveBlock:", type(nextHop))
+                # Should probably remove block or skip
+
+            index += 1
+
+    def updateSatelliteProcessesRL(self, graph):
+        """
+        Update: This function works now. The issue is that all the inter-plane packets that were in a queue to be sent are discarded
+        when the graph is updated and those links stop existing.
+        This function does not work correctly! The remaking of processes and queues fails when the satellites move
+        enough so that new links must be formed.
+
+        This function takes into account that the paths are not complete and the next step may not have been chosen yet.
+
+        Function which ensures all processes on all satellites are updated after constellation movement. This is done in
+        several steps:
+            - All blocks waiting to be sent or currently being sent has their paths updated.
+            - ISLs are updated with references to new inter-orbit satellites (intra-orbit links do not change).
+                - This includes updating buffer if ISL is changed
+                - It also includes remaking send-process if ISL is changed
+                - Despite intra-orbit links not changing, blocks in an intra-orbit buffer may have to be moved.
+            - GSL is updated:
+                - Depending on new status - whether the satellite has a GSL or not - and past status - whether the
+                satellite had a GSL or not - GSL buffer and process is handled accordingly.
+            - All blocks not currently being transmitted to a satellite/GT, which is still present as a ISL or GSL, are
+            redistributed to send-buffers according to their arrival time at the satellite.
+
+        This function differentiates from the simple version by allowing continued operation of send-processes after
+        constellation movement if the link is not broken.
+        """
+        # update linked sats
+        sats = []
+        for plane in self.LEO:
+            for sat in plane.sats:
+                sats.append(sat)
+                if self.agent is not None:
+                    # update ISL. Intra-plane should not change
+                    sat.findIntraNeighbours(self)
+                    sat.findInterNeighbours(self)
+
+        print('Remaking paths for all blocks in constellation...')
+        for plane in self.LEO:
+            for sat in plane.sats:
+                # get next step for all blocks
+                # doing this here assumes that the constellation movement will have a limited effect on the links
+                # and that the queue sizes will not change significantly.
+
+                # intra satellite buffers
+                for buffer in sat.sendBufferSatsIntra:
+                    self._process_buffer_rl(buffer, sat)
+
+                # inter satellite buffers
+                for buffer in sat.sendBufferSatsInter:
+                    self._process_buffer_rl(buffer, sat)
+                
+                # 假设在移动时会将发送到地面站的数据发完，也就是这些数据不在进行决策，直接发到地面站，但是链路已经变了，怎么处理呢
+                self._process_buffer_rl(sat.sendBufferGT, sat, buf_pos_flag=True)
+                # print('Remade paths for all blocks in satellite', sat.ID)
+                # find neighboring satellites
+                neighbors = list(nx.neighbors(graph, sat.ID))
+                itt = 0
+                neighborSatsInter = []
+                for sat2 in sats:
+                    if sat2.ID in neighbors:
+                        # we only care about the satellite if it is an inter-plane ISL
+                        # we assume intra-plane ISLs will not change
+                        if sat2.in_plane != sat.in_plane:
+                            dataRate = nx.path_weight(graph, [sat2.ID, sat.ID], "dataRateOG")
+                            distance = nx.path_weight(graph, [sat2.ID, sat.ID], "slant_range")
+                            neighborSatsInter.append((distance, sat2, dataRate))
+                        itt += 1
+                        if itt == len(neighbors):
+                            break
+                sat.interSats = neighborSatsInter
+                # list of blocks to be redistributed
+                blocksToDistribute = []
+
+                ### inter-plane ISLs ###
+
+                sat.newBuffer = [True for _ in range(len(neighborSatsInter))]
+
+                # make a list of False entries for each current neighbor
+                sameSats = [False for _ in range(len(neighborSatsInter))]
+
+                buffers = [None for _ in range(len(neighborSatsInter))]
+                processes = [None for _ in range(len(neighborSatsInter))]
+
+                # go through each process/buffer
+                #   - check if the satellite is still there:
+                #       - if it is, change the corresponding False to True, handle blocks and add process and buffer references to temporary list
+                #       - if it is not, remove blocks from buffer and stop process
+                for bufferIndex, buffer in enumerate(sat.sendBufferSatsInter):
+                    # check if the satellite is still there
+                    isPresent = False
+                    for neighborIndex, neighbor in enumerate(neighborSatsInter):
+                        if buffer[2] == neighbor[1].ID:
+                            isPresent = True
+                            sameSats[neighborIndex] = True
+
+                            ## handle blocks
+                            # check if there are blocks in the buffer
+                            if buffer[1]:
+                                # find index of satellite in block's path
+                                index = None
+                                for i, step in enumerate(buffer[1][0].QPath):
+                                    if sat.ID == step[0]:
+                                        index = i
+                                        break
+
+                                # check if next step in path corresponds to buffer's satellite
+                                if index is not None and index + 1 < len(buffer[1][0].QPath) and buffer[1][0].QPath[index + 1][0] == buffer[2]:
+                                    # add all but the first block to redistribution list
+                                    for block in buffer[1][1:]:
+                                        blocksToDistribute.append((block.checkPoints[-1], block))
+
+                                    # add buffer with only first block present to temp list
+                                    buffers[neighborIndex] = ([sat.env.event().succeed()], [sat.sendBufferSatsInter[bufferIndex][1][0]], buffer[2])
+                                    
+                                    # Restart process to update neighbor info (distance, dataRate)
+                                    sat.sendBlocksSatsInter[bufferIndex].interrupt()
+                                    processes[neighborIndex] = sat.env.process(sat.sendBlock(neighbor, True, False))
+                                else:
+                                    # add all blocks to redistribution list
+                                    for block in buffer[1]:
+                                        blocksToDistribute.append((block.checkPoints[-1], block))
+                                    # reset buffer
+                                    buffers[neighborIndex] = ([sat.env.event()], [], buffer[2])
+
+                                    # reset process
+                                    sat.sendBlocksSatsInter[bufferIndex].interrupt()
+                                    processes[neighborIndex] = sat.env.process(sat.sendBlock(neighbor, True, False))
+
+                            else: # there are no blocks in the buffer
+                                # add buffer and remake process
+                                buffers[neighborIndex] = sat.sendBufferSatsInter[bufferIndex]
+                                sat.sendBlocksSatsInter[bufferIndex].interrupt()
+                                processes[neighborIndex] = sat.env.process(sat.sendBlock(neighbor, True, False))
+                                # sendBlocksSatsInter[bufferIndex]
+
+                            break
+                    if not isPresent:
+                        # add blocks to redistribution list
+                        print('Inter-plane ISL broken, redistributing blocks from satellite', sat.ID, 'to satellite', buffer[2])
+                        for block in buffer[1]:
+                            blocksToDistribute.append((block.checkPoints[-1], block))
+                        # stop process
+                        sat.sendBlocksSatsInter[bufferIndex].interrupt()
+
+                # make buffer and process for new neighbors(s)
+                # - go through list of previously false entries:
+                #   - check  entry for each neighbor:
+                #       - if False, create buffer and process for new neighbor
+                # - clear temporary list of processes and buffers
+                for entryIndex, entry in enumerate(sameSats):
+                    if not entry:
+                        buffers[entryIndex] = ([sat.env.event()], [], neighborSatsInter[entryIndex][1].ID)
+                        processes[entryIndex] = sat.env.process(sat.sendBlock(neighborSatsInter[entryIndex], True, False))
+
+                # overwrite buffers and processes
+                sat.sendBlocksSatsInter = processes
+                sat.sendBufferSatsInter = buffers
+
+                ### intra-plane ISLs ###
+                # check blocks for each buffer
+                for bufferIndex, buffer in enumerate(sat.sendBufferSatsIntra):
+                    ## handle blocks
+                    # check if there are blocks in the buffer
+                    if buffer[1]:
+                        # find index of satellite in block's path
+                        index = None
+                        for i, step in enumerate(buffer[1][0].QPath):
+                            if sat.ID == step[0]:
+                                index = i
+                                break
+
+                        # check if next step in path corresponds to buffer's satellite
+                        if index is not None and index + 1 < len(buffer[1][0].QPath) and buffer[1][0].QPath[index + 1][0] == buffer[2]:
+                            # add all but the first block to redistribution list
+                            for block in buffer[1][1:]:
+                                blocksToDistribute.append((block.checkPoints[-1], block))
+
+                            # remove all but the first block and event from the buffer
+                            length = len(sat.sendBufferSatsIntra[bufferIndex][1]) - 1
+                            for _ in range(length):
+                                sat.sendBufferSatsIntra[bufferIndex][1].pop(1)
+                                sat.sendBufferSatsIntra[bufferIndex][0].pop(1)
+
+                        else:
+                            # add all blocks to redistribution list
+                            for block in buffer[1]:
+                                blocksToDistribute.append((block.checkPoints[-1], block))
+                            # reset buffer
+                            sat.sendBufferSatsIntra[bufferIndex] = ([sat.env.event()], [], buffer[2])
+
+                            # reset process
+                            sat.sendBlocksSatsIntra[bufferIndex].interrupt()
+                            sat.sendBlocksSatsIntra[bufferIndex] = sat.env.process(sat.sendBlock(sat.intraSats[bufferIndex], True, True))
+
+                ### GSL ###
+                # check if satellite has a linked GT
+                if sat.linkedGT is not None:
+                    sat.adjustDownRate()
+
+                    # check if it had a sendBlocksGT process
+                    if sat.sendBlocksGT:
+                        sat.sendBlocksGT[0].interrupt()
+                        sat.sendBlocksGT = []
+
+                    # make new send process for new linked GT
+                    # We assume that even if the link changed, the blocks in the buffer should be sent to the current linked GT
+                    # (User assumption: packets are sent to ground station before switching / directly sent)
+                    sat.sendBlocksGT.append(
+                        sat.env.process(sat.sendBlock((sat.GTDist, sat.linkedGT), False)))
+
+                else:  # no linked GT
+                    # check if there is a sendBlocksGT process
+                    if sat.sendBlocksGT:
+                        sat.sendBlocksGT[0].interrupt()
+                        sat.sendBlocksGT = []
+                    
+                    # User assumption: Blocks in buffer had a link before movement and should be considered sent.
+                    # Flush buffer to receivedDataBlocks
+                    if sat.sendBufferGT[1]:
+                        # print(f"Flushing {len(sat.sendBufferGT[1])} blocks from Sat {sat.ID} to Ground (Link Lost)")
+                        for block in sat.sendBufferGT[1]:
+                            print(f'---------Block {block.ID} from Sat {sat.ID} assumed delivered to Ground (Link Lost)')
+                            # Assume delivered
+                            # Calculate propagation delay
+                            dx = sat.x - block.destination.x
+                            dy = sat.y - block.destination.y
+                            dz = sat.z - block.destination.z
+                            dist = math.sqrt(dx*dx + dy*dy + dz*dz)
+                            propTime = dist / Vc
+                            
+                            block.checkPoints.append(sat.env.now + propTime)
+                            receivedDataBlocks.append(block)
+                        
+                        # Clear buffer
+                        sat.sendBufferGT = ([sat.env.event()], [])
+
+                # sort blocks by arrival time at satellite
+                try:
+                    blocksToDistribute.sort(key=lambda x: x[0])
+                except Exception as e:
+                    print(f"Caught an exception: {e}")
+                    print(f'Something wrong with: \n{blocksToDistribute}')
+                # add blocks to the correct queues based on next step in their path
+                # since the blocks list is sorted by arrival time, the order in the new queues is correct
+                for block in blocksToDistribute:
+                    # get this satellite's index in the blocks path
+                    index = None
+                    for i, step in enumerate(block[1].QPath):
+                        # Handle case where step is not a list/tuple (e.g. int ID)
+                        if isinstance(step, (list, tuple)):
+                            step_id = step[0]
+                        else:
+                            step_id = step
+
+                        if sat.ID == step_id:
+                            index = i
+                            break
+
+                    # check if next step in path is GT (last step in path)
+                    if index is None:
+                        print(f'Satellite {sat.ID} not found in the QPath: {block[1].QPath}') # FIXME This should not happen. Debugging I realized when this happens the previous satellite is twice in last positions of QPath, instead of prevSat and currentSat. The current sat was the linked to the gateways bu after the movement it is not anymore.
+                        self.lostBlocks += 1
+                    elif index == len(block[1].QPath) - 2:
+                        # add block to GT send-buffer
+                        if not sat.sendBufferGT[0][0].triggered:
+                            sat.sendBufferGT[0][0].succeed()
+                            sat.sendBufferGT[1].append(block[1])
+                        else:
+                            newEvent = sat.env.event().succeed()
+                            sat.sendBufferGT[0].append(newEvent)
+                            sat.sendBufferGT[1].append(block[1])
+                    else:
+                        # get ID of next sat and find if it is intra or inter
+                        ID = None
+                        isIntra = False
+                        for neighborSat in sat.intraSats:
+                            id = neighborSat[1].ID
+                            if id == block[1].QPath[index + 1][0]:
+                                ID = neighborSat[1].ID
+                                isIntra = True
+                        for neighborSat in sat.interSats:
+                            id = neighborSat[1].ID
+                            if id == block[1].QPath[index + 1][0]:
+                                ID = neighborSat[1].ID
+
+                        if ID is not None:
+                            sendBuffer = None
+                            # find send-buffer for the satellite
+                            if isIntra:
+                                for buffer in sat.sendBufferSatsIntra:
+                                    if ID == buffer[2]:
+                                        sendBuffer = buffer
+                                        break
+                            else:
+                                for buffer in sat.sendBufferSatsInter:
+                                    if ID == buffer[2]:
+                                        sendBuffer = buffer
+                                        break
+
+                            if sendBuffer is not None:
+                                # add block to buffer
+                                if not sendBuffer[0][0].triggered:
+                                    sendBuffer[0][0].succeed()
+                                    sendBuffer[1].append(block[1])
+                                else:
+                                    newEvent = sat.env.event().succeed()
+                                    sendBuffer[0].append(newEvent)
+                                    sendBuffer[1].append(block[1])
+                            else:
+                                print(f"Buffer for next satellite {ID} in path could not be found on sat {sat.ID}")
+                        else:
+                            print("buffer for next satellite in path could not be found")
+
+    def updateGTPaths(self):
+        """
+        Updates all paths for all GTs going to all other GTs and ensures that all blocks waiting to be sent has the
+        correct path.
+        """
+        # make new paths for all GTs
+        for GT in self.gateways:
+            for destination in self.gateways:
+                if GT != destination:
+                    if destination.linkedSat[0] is not None and GT.linkedSat[0] is not None:
+                        path = getShortestPath(GT.name, destination.name, GT.graph)
+                        GT.paths.update({destination.name: path})
+
+                    else:
+                        GT.paths.update({destination.name: []})
+                        print("no path from gateway!!")
+
+            # update paths for all blocks in send-buffer
+            for block in GT.sendBuffer[1]:
+                block.path = GT.paths[block.destination.name]
+                block.isNewPath = True
+                block.QPath = [block.path[0], block.path[1], block.path[len(block.path) - 1]]
+                # We add a Qpath field for the Q-Learning case. Only source and destination will be added
+                # after that, every hop will be added at the second last position.
+
 
     def plotMap(self, plotGT = True, plotSat = True, path = None, bottleneck = None, save = False, ID=None, time=None, edges=False, arrow_gap=0.008, outputPath='', paths=None, fileName="map.png", n = None):
         if paths is None:
@@ -320,8 +793,8 @@ class Earth:
                     gridSatX = int((0.5 + math.degrees(sat.longitude) / 360) * 1440)
                     gridSatY = int((0.5 - math.degrees(sat.latitude) / 180) * 720) #GT.totalY)
                     scat2 = plt.scatter(gridSatX, gridSatY, marker='o', s=18, linewidth=0.5, edgecolors='black', color=c, label=sat.ID)
-                    if plotSatID:
-                        plt.text(gridSatX + 10, gridSatY - 10, sat.ID, fontsize=6, ha='left', va='center')    # ANCHOR plots the text of the ID of the satellites
+                    # if plotSatID:
+                    #     plt.text(gridSatX + 10, gridSatY - 10, sat.ID, fontsize=6, ha='left', va='center')    # ANCHOR plots the text of the ID of the satellites
 
         if plotGT:
             for GT in self.gateways:
@@ -365,7 +838,7 @@ class Earth:
 
         # Plot the map with the usage of all the links
         if paths is not None:
-            link_usage = calculate_link_usage([block.QPath for block in paths]) if pathing == 'Q-Learning' or pathing == 'Deep Q-Learning' else calculate_link_usage([block.path for block in paths])
+            link_usage = calculate_link_usage([block.QPath for block in paths]) if self.agent is not None else calculate_link_usage([block.path for block in paths])
 
             # After calculating max_usage in the plotting section
             try:
@@ -461,36 +934,6 @@ class Earth:
             plt.tight_layout()
             plt.savefig(fileName, dpi=1000, bbox_inches='tight', pad_inches=0)   
   
-    def initializeQTables(self, NGT, hyperparams, g):
-        '''
-        QTables initialization at each satellite
-        '''
-        print('----------------------------------')
-
-        # path = './Results/Q-Learning/qTablesImport/qTablesExport/' + str(NGT) + 'GTs/'
-        path = tablesPath
-
-        if importQVals:
-            print('Importing Q-Tables from: ' + path)
-        else:
-            print('Initializing Q-tables...')
-        
-        i = 0
-        for plane in self.LEO:
-            for sat in plane.sats:
-                i += 1
-                if importQVals:
-                    with open(path + sat.ID + '.npy', 'rb') as f:
-                        qTable = np.load(f)
-                    sat.QLearning = QLearning(NGT, hyperparams, self, g, sat, qTable=qTable)
-                else:
-                    sat.QLearning = QLearning(NGT, hyperparams, self, g, sat)
-
-        if importQVals:
-            print(str(i) + ' Q-Tables imported!')
-        else:
-            print(str(i) + ' Q-Tables created!')
-        print('----------------------------------')
 
     def plot3D(self):
         fig = plt.figure()

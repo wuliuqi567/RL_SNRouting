@@ -8,7 +8,7 @@
             "name": "SimulationRL_torch",
             "type": "debugpy",
             "request": "launch",
-            "program": "SimulationRL_torch.py",
+            "program": "simrl.py",
             "console": "integratedTerminal"
             
         }

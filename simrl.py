@@ -6,12 +6,14 @@ import pandas as pd
 import networkx as nx
 from datetime import datetime
 import time
+import traceback
 
 import sys
 from Algorithm.agent.mhgnn_agent import MHGNNAgent
 from Utils.logger import Logger
 from Utils.utilsfunction import *
 from system_configure import *
+import system_configure
 from globalvar import *
 from Utils.plotfunction import *
 import gc
@@ -34,7 +36,7 @@ def simProgress(simTimelimit, env):
         progress += 1
 
 
-def initialize(env, agent_class, popMapLocation, GTLocation, distance, inputParams, movementTime, totalLocations, outputPath, matching='Greedy'):
+def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movementTime, outputPath, matching='Greedy'):
     """
     Initializes an instance of the earth with cells from a population map and gateways from a csv file.
     During initialisation, several steps are performed to prepare for simulation:
@@ -47,19 +49,20 @@ def initialize(env, agent_class, popMapLocation, GTLocation, distance, inputPara
         - Buffers and processes are created on all GTs and satellites used for sending the blocks throughout the network
     """
 
-    constellationType = inputParams['Constellation'][0]
-    fraction = inputParams['Fraction'][0]
-    testType = inputParams['Test type'][0]
-    print(f'Fraction of traffic generated: {fraction}, test type: {testType}')
+    # constellationType = inputParams['Constellation'][0]
+    # fraction = inputParams['Fraction'][0]
+    # testType = inputParams['Test type'][0]
+
+    print(f'Fraction of traffic generated: {Fraction}, test type: {Test_type}')
     # pathing  = inputParams['Pathing'][0]
 
-    if testType == "Rates":
+    if Test_type == "Rates":
         getRates = True
     else:
         getRates = False
 
     # Load earth and gateways
-    earth = Earth(env, agent_class, popMapLocation, GTLocation, constellationType, inputParams, movementTime, totalLocations, getRates, outputPath=outputPath)
+    earth = Earth(env, agent_class, popMapLocation, allGateWayInfo, Constellation, movementTime, getRates, outputPath=outputPath)
     
     # if algo == "global":
     # earth.agent = agent_class()
@@ -96,9 +99,10 @@ def initialize(env, agent_class, popMapLocation, GTLocation, distance, inputPara
             sats.append(sat)
             # Catalogues the inter-plane ISL as east or west (Right or left)
             sat.findInterNeighbours(earth)
+            sat.findIntraNeighbours(earth)
 
-    fiveNeighbors = ([0],[])
-    pathNames = [name[0] for name in path]
+    # fiveNeighbors = ([0],[])
+    # pathNames = [name[0] for name in path]
     for plane in earth.LEO:
         for sat in plane.sats:
             if sat.linkedGT is not None:
@@ -106,14 +110,18 @@ def initialize(env, agent_class, popMapLocation, GTLocation, distance, inputPara
                 # make a process for the GSL from sat to GT
                 sat.sendBlocksGT.append(sat.env.process(sat.sendBlock((sat.GTDist, sat.linkedGT), False)))
             neighbors = list(nx.neighbors(graph, sat.ID))
-            if len(neighbors) == 5:
-                fiveNeighbors[0][0] += 1
-                fiveNeighbors[1].append(neighbors)
+            # if len(neighbors) == 5:
+            #     print(sat, '5 neighbors found')
+                # fiveNeighbors[0][0] += 1
+                # fiveNeighbors[1].append(neighbors)
+            if len(neighbors) != 4 and sat.linkedGT is None:
+                print(sat, f'{len(neighbors)} neighbors found')
+
             itt = 0
             for sat2 in sats:
                 if sat2.ID in neighbors:
-                    dataRate = nx.path_weight(graph,[sat2.ID, sat.ID], "dataRateOG")
-                    distance = nx.path_weight(graph,[sat2.ID, sat.ID], "slant_range")
+                    dataRate = graph[sat2.ID][sat.ID]["dataRateOG"]
+                    distance = graph[sat2.ID][sat.ID]["slant_range"]
                     # check if satellite is inter- or intra-plane
                     if sat2.in_plane == sat.in_plane:
                         sat.intraSats.append((distance, sat2, dataRate))
@@ -144,9 +152,9 @@ def initialize(env, agent_class, popMapLocation, GTLocation, distance, inputPara
                 _, minimum = findBottleneck(GT.paths[pathKey], earth)
                 mins.append(minimum)
             if GT.dataRate < GT.linkedSat[1].downRate:
-                GT.getTotalFlow(1, "Step", 1, GT.dataRate, fraction)  # using data rate of the GSL uplink
+                GT.getTotalFlow(1, flowGenType, 1, GT.dataRate, Fraction)  # using data rate of the GSL uplink
             else:
-                GT.getTotalFlow(1, "Step", 1, GT.linkedSat[1].downRate, fraction)  # using data rate of the GSL downlink
+                GT.getTotalFlow(1, flowGenType, 1, GT.linkedSat[1].downRate, Fraction)  # using data rate of the GSL downlink
     print('----------------------------------')
 
 
@@ -163,20 +171,15 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
                 'Transmission time': [],
                 'GTnumber' : []}
     '''
-    inputParams = pd.read_csv("./inputRL.csv")
+    allGateWayInfo = pd.read_csv("./Gateways.csv")
     populationDataDir = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
 
-    locations = inputParams['Locations'].copy()
-    print('N of Gateways: ' + str(len(locations)))
-
-    testType    = inputParams['Test type'][0]
-    testLength  = inputParams['Test length'][0]
-
-    simulationTimelimit = testLength if testType != "Rates" else movementTime * testLength + 10
+    simulationTimelimit = Test_length if Test_type != "Rates" else movementTime * Test_length + 10
 
     for GTnumber in GTs:
         global CurrentGTnumber
         CurrentGTnumber = GTnumber
+        system_configure.CurrentGTnumber = GTnumber
         
         if len(GTs)>1:
             start_time_GT = datetime.now()
@@ -184,27 +187,46 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         env = simpy.Environment()
 
         if mixLocs: # changes the selected GTs every iteration
-            firstLocs = locations[:max(GTs)]
-            random.shuffle(firstLocs)
-            locations[:max(GTs)] = firstLocs
+            # Shuffle the first max(GTs) rows of the DataFrame
+            # sample(frac=1) shuffles all rows, reset_index(drop=True) resets the index
+            shuffled_rows = allGateWayInfo.iloc[:max(GTs)].sample(frac=1).reset_index(drop=True)
+            
+            # Assign the shuffled rows back to the original DataFrame
+            # This ensures that Location, Latitude, and Longitude stay aligned for each row
+            allGateWayInfo.iloc[:max(GTs)] = shuffled_rows.values
             # random.shuffle(locations)
-        inputParams['Locations'] = locations[:GTnumber] # only use the first GTnumber locations
+        selectedGateWayLocations = {'Location': allGateWayInfo['Location'][:GTnumber]} # only use the first GTnumber locations
+        selectedGateWayLocations.update({'Latitude': allGateWayInfo['Latitude'][:GTnumber]})
+        selectedGateWayLocations.update({'Longitude': allGateWayInfo['Longitude'][:GTnumber]})
         print('----------------------------------')
         print('Time:')
         print(datetime.now().strftime("%H:%M:%S"))
         print('Locations:')
-        print(inputParams['Locations'][:GTnumber])
+        print(selectedGateWayLocations['Location'])
         print(f'Movement Time: {movementTime}')
 
 
-        earth1, _, _, _ = initialize(env, agent_class, populationDataDir, './Gateways.csv', radioKM, inputParams, movementTime, locations, outputPath, matching=matching)
+        # earth1, _, _, _ = initialize(env, agent_class, populationDataDir, './Gateways.csv', radioKM, inputParams, movementTime, locations, outputPath, matching=matching)
+        earth1, _, _, _ = initialize(env, agent_class, populationDataDir, allGateWayInfo, radioKM, movementTime, outputPath, matching=matching)
+        
         earth1.outputPath = outputPath
         
 
         # run the simulation
         env.process(simProgress(simulationTimelimit, env))
         startTime = time.time()
-        env.run(simulationTimelimit)
+        try:
+            env.run(simulationTimelimit)
+        except Exception as e:
+            # SimPy re-raises a *new* exception instance and stores the original (with traceback)
+            # in e.__cause__. Print it so we can see the real origin of errors like KeyError('block').
+            print("\n[ERROR] Simulation crashed inside SimPy.")
+            if getattr(e, "__cause__", None) is not None:
+                print("[ERROR] Original exception (SimPy __cause__):")
+                traceback.print_exception(e.__cause__)
+            else:
+                traceback.print_exception(e)
+            raise
         timeToSim = time.time() - startTime
 
         # save learnt values
@@ -220,11 +242,11 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         # plotting and saving results
         print('Simulation time: {} seconds'.format(round(timeToSim, 2)))
         print('----------------------------------')
-        if testType == "Rates":
+        if Test_type == "Rates":
             plotRatesFigures()
         else:
             # save the congestion_test in getBlockTransmissionStats() function
-            results, allLatencies, pathBlocks, blocks = getBlockTransmissionStats(timeToSim, inputParams['Locations'], inputParams['Constellation'][0], earth1, outputPath)
+            results, allLatencies, pathBlocks, blocks = getBlockTransmissionStats(timeToSim, selectedGateWayLocations['Location'], Constellation, earth1, outputPath)
             print(f'DataBlocks lost: {earth1.lostBlocks}')
         
             plotSavePathLatencies(outputPath, GTnumber, pathBlocks)
@@ -311,7 +333,8 @@ if __name__ == '__main__':
     yaml_ruamel.indent(mapping=2, sequence=4, offset=2)
     
     config_file = "./Algorithm/algo_config/base_config.yaml"
-    test_outputPath = "./SimResults/TestRun/"
+    test_outputPath = "SimResults/MHGNN/2025-12-15/21-27-56_Starlink_0.5s_GTs_[2]/"
+
     with open(config_file, "r") as f:
         config_data = yaml_ruamel.load(f)
     
@@ -324,17 +347,18 @@ if __name__ == '__main__':
         
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
         filetime_hms = datetime.now().strftime("%H-%M-%S")
-        data_inputrl = pd.read_csv("inputRL.csv")
-        constellation = data_inputrl['Constellation'][0]
-        sim_time = data_inputrl['Test length'][0]
-        outputPath      = current_dir + f'/SimResults/{agent_name}/{filetime_ymd}/{filetime_hms}_{constellation}_{sim_time}s_GTs_{GTs}/train/'
+        # data_inputrl = pd.read_csv("inputRL.csv")
+        # constellation = data_inputrl['Constellation'][0]
+        # sim_time = data_inputrl['Test length'][0]
+        outputPath      = current_dir + f'/SimResults/{agent_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/train/'
         os.makedirs(outputPath, exist_ok=True) 
     else:
         if config_data['use_student_network']:
-            outputPath = os.path.join()(current_dir, test_outputPath + 'student_network/')
+            outputPath = os.path.join(current_dir, test_outputPath + 'test_student_network/')
         else:
-            outputPath = os.path.join()(current_dir, test_outputPath + 'teacher_network/')
-            os.makedirs(outputPath, exist_ok=True)
+            outputPath = os.path.join(current_dir, test_outputPath + 'test_teacher_network2/')
+        if not os.path.exists(outputPath):
+            os.makedirs(outputPath)
     sys.stdout = Logger(outputPath + 'logfile.log')
 
     config_data['outputPath'] = outputPath

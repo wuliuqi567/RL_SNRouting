@@ -26,7 +26,7 @@ pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
 
 
 ## replay buffer parameters
-buffer_size: 100000
+buffer_size: 1000000
 
 batch_size   : 128        # batchSize samples are taken from bufferSize samples to train the network
 
@@ -39,12 +39,12 @@ MIN_EPSILON : 0.001     # Minimum value that the exploration parameter can have
 LAMBDA      : 0.0005   # This value is used to decay the epsilon in the deep learning implementation
 decayRate   : 30    # Decay rate for epsilon decay in deep learning implementation
 
-updateF     : 2800      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
+updateF     : 2500      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
 gamma: 0.99
 
 nTrain      : 120         # The teacher network will train every nTrain steps
 
-learning_rate: 0.002
+learning_rate: 0.001
 lr_decay_steps: 10000000
-student_learning_rate: 0.00005
+student_learning_rate: 0.0005
 student_lr_decay_steps: 10000000

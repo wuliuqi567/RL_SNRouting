@@ -64,9 +64,20 @@ class DataBlock:
         return totalTime
 
     def __repr__(self):
-        return'ID = {}\n Source:\n {}\n Destination:\n {}\nTotal latency: {}'.format(
-            self.ID,
-            self.source,
-            self.destination,
-            self.totLatency
+        return (
+            f"DataBlock Details:\n"
+            f"  ID: {self.ID}\n"
+            f"  Source: {self.source}\n"
+            f"  Destination: {self.destination}\n"
+            f"  Creation Time: {self.creationTime}\n"
+            f"  Time at Full: {self.timeAtFull}\n"
+            f"  Time at First Transmission: {self.timeAtFirstTransmission}\n"
+            f"  Total Latency: {self.totLatency}\n"
+            f"  Queue Latency: {self.queueLatency}\n"
+            f"  Transmission Latency: {self.txLatency}\n"
+            f"  Propagation Latency: {self.propLatency}\n"
+            f"  Path Length: {len(self.path)}\n"
+            f"  QPath Length: {len(self.QPath)}\n"
+            f"  Is New Path: {self.isNewPath}\n"
+            f"  Checkpoints: {len(self.checkPoints)}"
         )

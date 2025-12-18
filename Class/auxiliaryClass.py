@@ -1,6 +1,6 @@
 import math
+# from Utils.utilsfunction import *
 from system_configure import *
-from Utils.utilsfunction import *
 from globalvar import *
 from scipy.optimize import linear_sum_assignment
 
@@ -107,17 +107,15 @@ class Cell:
         self.gateway = None  # (groundstation, distance)
 
     def __repr__(self):
-        return 'Users = {}\n area = {} km^2\n longitude = {} deg\n latitude = {} deg\n pos x = {}\n pos y = {}\n pos ' \
-               'z = {}\n x position on map = {}\n y position on map = {}'.format(
-                self.users,
-                '%.2f' % (self.area / 1e6),
-                '%.2f' % math.degrees(self.longitude),
-                '%.2f' % math.degrees(self.latitude),
-                '%.2f' % self.x,
-                '%.2f' % self.y,
-                '%.2f' % self.z,
-                '%.2f' % self.map_x,
-                '%.2f' % self.map_y)
+        gt_info = f"{self.gateway[0].name} (Dist: {self.gateway[1]:.2f} km)" if self.gateway else "None"
+        
+        return (f"Cell Info:\n"
+                f"  Map Position (x, y): ({self.map_x}, {self.map_y})\n"
+                f"  Coordinates (Lat, Lon): ({math.degrees(self.latitude):.4f}, {math.degrees(self.longitude):.4f})\n"
+                f"  Cartesian (x, y, z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})\n"
+                f"  Area: {self.area / 1e6:.2f} km^2\n"
+                f"  Users: {self.users}\n"
+                f"  Linked Gateway: {gt_info}")
 
     def setGT(self, gateways, maxDistance = 60):
         """

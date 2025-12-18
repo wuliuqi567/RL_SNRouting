@@ -7,9 +7,7 @@ from system_configure import *
 from Utils.utilsfunction import *
 from globalvar import *
 import geopy.distance
-from PIL import Image
-import pandas as pd
-import time
+
 from Class.auxiliaryClass import *
 from Class.dataBlock import DataBlock
 
@@ -142,6 +140,11 @@ class Gateway:
                     block.timeAtFull = self.env.now
                     createdBlocks.append(block)
                     # add block to send-buffer
+                    #sendBuffer 结构：这是一个元组 ([events], [blocks])。
+                    # sendBuffer[0]：SimPy 事件列表。
+                    # sendBuffer[1]：实际的数据包列表。
+                    # 如果缓冲区当前的事件 (sendBuffer[0][0]) 还没被触发（即发送进程在等待），则调用 succeed() 唤醒发送进程。
+                    # 如果已经被触发（说明发送进程正在忙或已经知道有数据了），则追加一个新的已触发事件，保持队列同步。
                     if not self.sendBuffer[0][0].triggered:
                         self.sendBuffer[0][0].succeed()
                         self.sendBuffer[1].append(block)
@@ -598,10 +601,15 @@ class Gateway:
             return False
 
     def __repr__(self):
-        return 'Location = {}\n Longitude = {}\n Latitude = {}\n pos x= {}, pos y= {}, pos z= {}'.format(
-            self.name,
-            self.longitude,
-            self.latitude,
-            self.x,
-            self.y,
-            self.z)
+        linked_sat_id = self.linkedSat[1].ID if self.linkedSat[1] else "None"
+        flow_str = f"{self.totalAvgFlow/1e9:.3f} Gbps" if self.totalAvgFlow else "None"
+        rate_str = f"{self.dataRate/1e6:.2f} Mbps" if self.dataRate else "None"
+
+        return (f"Gateway {self.name} (ID: {self.ID})\n"
+                f"  Coords (Lat, Lon): ({self.latitude:.4f}, {self.longitude:.4f})\n"
+                f"  Cartesian (x, y, z): ({self.x:.2f}, {self.y:.2f}, {self.z:.2f})\n"
+                f"  Grid: ({self.gridLocationX}, {self.gridLocationY})\n"
+                f"  Cells Covered: {len(self.cellsInRange)}\n"
+                f"  Total Flow: {flow_str}\n"
+                f"  Linked Sat: {linked_sat_id}\n"
+                f"  Data Rate: {rate_str}")

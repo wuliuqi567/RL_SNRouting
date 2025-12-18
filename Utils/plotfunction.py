@@ -14,7 +14,7 @@ def plotLatencies(percentages, pathing, savePath):
     '''
     Bar plot where each bar is a scenario with a different nº of gateways and where each color represents one of the three latencies.
     '''
-        # plot percent stacked barplot
+    # plot percent stacked barplot
     barWidth= 0.85
     r       = percentages['GTnumber']
     numbers = percentages['GTnumber']

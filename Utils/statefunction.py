@@ -140,14 +140,20 @@ def getDeepLinkedSats(satA, g=None, earth=None):
     at each direction based on the new definition of upper and lower satellites.
     Satellite at the right and left are determined based on inter-plane links.
     '''
-    linkedSats = {'U':None, 'D':None, 'R':None, 'L':None}
+    # IMPORTANT: If a graph is provided, we must derive neighbors from the graph edges.
+    # Otherwise, the agent may select a "neighbor" (e.g., satA.upper) that is not actually
+    # connected in the current topology, which later causes failures when enqueuing to send buffers.
+    if g is not None and earth is not None:
+        return getLinkedSats(satA, g, earth)
+
+    linkedSats = {'U': None, 'D': None, 'R': None, 'L': None}
 
     # Use the provided logic to find intra-plane neighbours (upper and lower)
     # satA.findIntraNeighbours(earth)
-    linkedSats['U'] = satA.upper
-    linkedSats['D'] = satA.lower
-    linkedSats['R'] = satA.right
-    linkedSats['L'] = satA.left
+    linkedSats['U'] = getattr(satA, 'upper', None)
+    linkedSats['D'] = getattr(satA, 'lower', None)
+    linkedSats['R'] = getattr(satA, 'right', None)
+    linkedSats['L'] = getattr(satA, 'left', None)
 
     # # Find inter-plane neighbours (right and left)
     # for edge in list(g.edges(satA.ID)):

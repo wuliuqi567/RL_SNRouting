@@ -131,6 +131,8 @@ class Satellite:
         return distance
 
     def __repr__(self):
+        # if len(self.Qpath)>5, print last 5 steps
+        # if hasattr(self, 'Qpath') and len(self.Qpath) > 5:  
         return '\nID = {}\n orbital plane= {}, index in plane= {}, h={}\n pos r = {}, pos theta = {},' \
                ' pos phi = {},\n pos x= {}, pos y= {}, pos z= {}\n inclination = {}\n polar angle = {}' \
                '\n latitude = {}\n longitude = {}'.format(
@@ -211,63 +213,78 @@ class Satellite:
 
         block.checkPoints.append(self.env.now)
 
-        # if QLearning or Deep Q-Learning we:
-        # Compute the next hop in the path and add it to the second last position (Last is the destination gateway)
-        # we let the (Deep) Q-model choose the next hop and it will be added to the block.QPath as mentioned
-        # if the next hop is the linked gateway it will simply not add anything and will let the model work normally
-        # if ((self.QLearning) or (self.orbPlane.earth.DDQNA is not None) or (self.DDQNA is not None)):
-        #     if len(block.QPath) > 3: # the block does not come from a gateway
-        #         if self.QLearning:
-        #             nextHop = self.QLearning.makeAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
-        #         elif self.DDQNA:
-        #             nextHop = self.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
-        #         else:
-        #             nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
-        #     else:
-        #         if self.QLearning:
-        #             nextHop = self.QLearning.makeAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
-        #         elif self.DDQNA:
-        #             nextHop = self.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
-        #         else:
-        #             nextHop = self.orbPlane.earth.DDQNA.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
+
         if self.agent is not None:
-            if len(block.QPath) > 3: # the block does not come from a gateway
-                nextHop = self.agent.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth, prevSat = (findByID(self.orbPlane.earth, block.QPath[len(block.QPath)-3][0])))
-            else:
-                nextHop = self.agent.makeDeepAction(block, self, self.orbPlane.earth.gateways[0].graph, self.orbPlane.earth)
+            def _step_id(step):
+                return step[0] if isinstance(step, (list, tuple)) else step
+
+            # QPath invariant we want at arrival time:
+            #   [..., prevSat, currentSat, destination]
+            # In practice, due to constellation movement / redistribution, QPath can sometimes contain
+            # stale "future" hops after currentSat. Remove them so routing decisions are consistent.
+            cur_idx = None
+            for i in range(len(block.QPath) - 1, -1, -1):
+                if _step_id(block.QPath[i]) == self.ID:
+                    cur_idx = i
+                    break
+
+            if cur_idx is not None and cur_idx != len(block.QPath) - 2:
+                # Drop everything between current sat and the destination marker.
+                del block.QPath[cur_idx + 1 : -1]
+
+            prevSat = None
+            if cur_idx is not None and cur_idx - 1 >= 0:
+                prev_id = _step_id(block.QPath[cur_idx - 1])
+                # prev_id can be a GT name (non-digit); only resolve satellites.
+                if isinstance(prev_id, str) and prev_id and prev_id[0].isdigit():
+                    prevSat = findByID(self.orbPlane.earth, prev_id)
+
+            nextHop = self.agent.makeDeepAction(
+                block,
+                self,
+                self.orbPlane.earth.gateways[0].graph,
+                self.orbPlane.earth,
+                prevSat=prevSat,
+            )
             if nextHop == -1:
                 # exceed max hops, drop the block
                 dropBlocks.append(block)
                 return
-            elif nextHop != 0:
+            elif nextHop == -2:
+                # no arivable action, drop the block
+                dropBlocks.append(block)
+                print("No available action, dropping block", block.ID, "at satellite", self.ID)
+                return
+            elif nextHop == 0:
+                # arrive at destination
+                pass
+            elif isinstance(nextHop, list): #['18_20', -133.12012370027912, 42.210392220392556] dest.ID, longitude, latitude
                 block.QPath.insert(len(block.QPath)-1 ,nextHop)
                 # pathPlot = block.QPath.copy()
                 # pathPlot.pop()
-            # else:
-                # pathPlot = block.QPath.copy()
-            
-            # If plotPath plots an image for every action taken. Plots 1/10 of blocks. # ANCHOR plot action satellite
-            #################################################################
-            # if self.orbPlane.earth.plotPaths:
-            #     if int(block.ID[len(block.ID)-1]) == 0:
-            #         os.makedirs(self.orbPlane.earth.outputPath + '/pictures/', exist_ok=True) # create output path
-            #         outputPath = self.orbPlane.earth.outputPath + '/pictures/' + block.ID + '_' + str(len(block.QPath)) + '_'
-            #         # plotShortestPath(self.orbPlane.earth, pathPlot, outputPath)
-            #         plotShortestPath(self.orbPlane.earth, pathPlot, outputPath, ID=block.ID, time = block.creationTime)
-            #################################################################
+            else:
+                print("Error unknown nextHop type in receiveBlock:", type(nextHop))
+                return
 
             path = block.QPath  # if there is Q-Learning the path will be repalced with the QPath
         else:
             path = block.path   # if there is no Q-Learning we will work with the path as normally
 
-        # get this satellites index in the blocks path
-        index = None
-        for i, step in enumerate(path):
-            if self.ID == step[0]:
-                index = i
+        def _step_id(step):
+            return step[0] if isinstance(step, (list, tuple)) else step
 
-        if not index:
-            print(path)
+        # get this satellite's index in the block path.
+        # Use the last occurrence to represent the current location (QPath can contain historical repeats).
+        index = None
+        for i in range(len(path) - 1, -1, -1):
+            if _step_id(path[i]) == self.ID:
+                index = i
+                break
+
+        if index is None:
+            print(f"[WARN] Sat {self.ID} not found in path for block {block.ID}: {path}")
+            dropBlocks.append(block)
+            return
 
         # check if next step in path is GT (last step in path)
         if index == len(path) - 2:
@@ -281,31 +298,64 @@ class Satellite:
                 self.sendBufferGT[1].append(block)
 
         else:
-            ID = None
-            isIntra = False
-            # get ID of next sat
-            for sat in self.intraSats:
-                id = sat[1].ID
-                if id == path[index + 1][0]:
-                    ID = sat[1].ID
-                    isIntra = True
-            if not isIntra:
-                for sat in self.interSats:
-                    id = sat[1].ID
-                    if id == path[index + 1][0]:
-                        ID = sat[1].ID
+            next_step = path[index + 1]
+            next_id = _step_id(next_step)
 
-            if ID is not None:
-                sendBuffer = None
-                # find send-buffer for the satellite
-                if isIntra:
-                    for buffer in self.sendBufferSatsIntra:
-                        if ID == buffer[2]:
-                            sendBuffer = buffer
-                else:
-                    for buffer in self.sendBufferSatsInter:
-                        if ID == buffer[2]:
-                            sendBuffer = buffer
+            def _find_send_buffer_for(next_hop_id: str):
+                for buf in self.sendBufferSatsIntra:
+                    if buf[2] == next_hop_id:
+                        return buf
+                for buf in self.sendBufferSatsInter:
+                    if buf[2] == next_hop_id:
+                        return buf
+                return None
+
+            sendBuffer = _find_send_buffer_for(next_id)
+
+            # If the next hop is no longer a neighbor after topology movement, try to recompute once.
+            if sendBuffer is None and self.agent is not None:
+                try:
+                    # Recompute next hop with current graph/topology (do not assume previous hop is still valid).
+                    recomputed = self.agent.makeDeepAction(
+                        block,
+                        self,
+                        self.orbPlane.earth.gateways[0].graph,
+                        self.orbPlane.earth,
+                        None,
+                        'recalculate',
+                    )
+                except Exception as e:
+                    recomputed = None
+                    print(f"[WARN] Recompute next hop failed on sat {self.ID} for block {block.ID}: {e}")
+
+                if recomputed == 0:
+                    # Treat as destination reached (queue to GT)
+                    if not self.sendBufferGT[0][0].triggered:
+                        self.sendBufferGT[0][0].succeed()
+                        self.sendBufferGT[1].append(block)
+                    else:
+                        newEvent = self.env.event().succeed()
+                        self.sendBufferGT[0].append(newEvent)
+                        self.sendBufferGT[1].append(block)
+                    return
+                elif isinstance(recomputed, list):
+                    # Update QPath similarly to receiveBlock insertion semantics.
+                    if len(block.QPath) >= 2 and _step_id(block.QPath[-2]) == self.ID:
+                        block.QPath.insert(len(block.QPath) - 1, recomputed)
+                    elif len(block.QPath) >= 3 and _step_id(block.QPath[-3]) == self.ID:
+                        block.QPath[-2] = recomputed
+                    # Refresh path/index/next_id
+                    path = block.QPath
+                    index = None
+                    for i in range(len(path) - 1, -1, -1):
+                        if _step_id(path[i]) == self.ID:
+                            index = i
+                            break
+                    if index is not None and index + 1 < len(path):
+                        next_id = _step_id(path[index + 1])
+                        sendBuffer = _find_send_buffer_for(next_id)
+
+            if sendBuffer is not None:
                 # ANCHOR save the queue length that the block found at its next hop
                 self.orbPlane.earth.queues.append(len(sendBuffer[1]))
                 block.queue.append(len(sendBuffer[1]))
@@ -318,11 +368,15 @@ class Satellite:
                     newEvent = self.env.event().succeed()
                     sendBuffer[0].append(newEvent)
                     sendBuffer[1].append(block)
-
             else:
                 print(
-                    "ERROR! Sat {} tried to send block to {} but did not have it in its linked satellite list".format(
-                        self.ID, path[index + 1][0]))
+                    f"ERROR! Sat {self.ID} tried to send {block.ID} to {next_id} but did not have it in its linked satellite list"
+                )
+                print(block)
+                print('\n'.join([str(sat[1].ID) for sat in self.intraSats]))
+                print('\n'.join([str(sat[1].ID) for sat in self.interSats]))
+                dropBlocks.append(block)
+                return
 
     def sendBlock(self, destination, isSat, isIntra = None):
         """
@@ -336,6 +390,9 @@ class Satellite:
 
         A process is running this method for each ISL and for the downLink GSL the satellite has. This will usually be
         4 ISL processes and 1 GSL process.
+
+        destination: (sat.GTDist, sat.linkedGT)
+        self.sendBufferSatsIntra = ([self.env.event()], [DataBlock(0, 0, "0", 0)], Tosat2.ID), ...]
         """
 
         if isIntra is not None:
@@ -355,7 +412,7 @@ class Satellite:
         while True:
             try:
                 yield sendBuffer[0][0]
-
+                # sendBuffer = ([env.event()], [])
                 # print(f'Satellite Sending block {sendBuffer[1][0].ID} from satellite {self.ID} to {destination[1].ID} at time {self.env.now}')
 
                 # ANCHOR KPI: queueLatency at sat
@@ -425,6 +482,19 @@ class Satellite:
                 break
 
     def adjustDownRate(self):
+        """
+        Calculates the downlink data rate (Satellite to Gateway) using Adaptive Coding and Modulation (ACM).
+
+        The function performs the following steps:
+        1. Defines MCS (Modulation and Coding Scheme) thresholds for spectral efficiency and required SNR.
+        2. Calculates Free Space Path Loss (FSPL) based on the current distance to the linked Gateway.
+        3. Computes the received Signal-to-Noise Ratio (SNR) using the link budget equation:
+           SNR = P_tx + G_total - PathLoss - N_0
+        4. Selects the highest feasible spectral efficiency from the defined thresholds that satisfies the current SNR.
+        5. Updates `self.downRate` by multiplying the bandwidth with the selected spectral efficiency.
+
+        Note: This method uses discrete DVB-S2/X like thresholds rather than the theoretical Shannon limit.
+        """
 
         speff_thresholds = np.array(
             [0, 0.434841, 0.490243, 0.567805, 0.656448, 0.789412, 0.889135, 0.988858, 1.088581, 1.188304, 1.322253,
@@ -448,7 +518,7 @@ class Satellite:
 
         pathLoss = 10*np.log10((4*math.pi*self.linkedGT.linkedSat[0]*self.ngeo2gt.f/Vc)**2)
         snr = 10**((self.ngeo2gt.maxPtx_db + self.ngeo2gt.G - pathLoss - self.ngeo2gt.No)/10)
-        shannonRate = self.ngeo2gt.B*np.log2(1+snr)
+        # shannonRate = self.ngeo2gt.B*np.log2(1+snr)
 
         feasible_speffs = speff_thresholds[np.nonzero(lin_thresholds <= snr)]
         speff = self.ngeo2gt.B * feasible_speffs[-1]
@@ -501,6 +571,20 @@ class Satellite:
                     print(f'Sat: {satB.ID} direction not found with respect to {self.ID}')
             else:   # it is a GT
                 pass
+        num_of_orbital_plane = self.in_plane
+        num_of_in_plane = self.i_in_plane
+        # 推断右侧卫星是否和计算的一样
+        if self.right is not None:
+            expected_right_plane = (num_of_orbital_plane + 1) % len(earth.LEO)
+            expected_right_index = num_of_in_plane
+            if self.right.in_plane != expected_right_plane or self.right.i_in_plane != expected_right_index:
+                print(f"Satellite {self.ID} right neighbor mismatch: expected plane {expected_right_plane}, index {expected_right_index}, but got plane {self.right.in_plane}, index {self.right.i_in_plane}.")
+        # 推断左侧卫星是否和计算的一样
+        if self.left is not None:
+            expected_left_plane = (num_of_orbital_plane - 1 + len(earth.LEO)) % len(earth.LEO)
+            expected_left_index = num_of_in_plane
+            if self.left.in_plane != expected_left_plane or self.left.i_in_plane != expected_left_index:
+                print(f"Satellite {self.ID} left neighbor mismatch: expected plane {expected_left_plane}, index {expected_left_index}, but got plane {self.left.in_plane}, index {self.left.i_in_plane}.")
         
     def rotate(self, delta_t, longitude, period):
         """

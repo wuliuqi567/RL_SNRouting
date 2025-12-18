@@ -7,7 +7,11 @@ GTs = [2]               # number of gateways to be tested
 # GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
 
 CurrentGTnumber = -1    # Number of active gateways. This number will be updated every time a gateway is added. In the simulation it will iterate the GTs list
-
+Constellation = 'Starlink'  # 'OneWeb' 'Starlink' 'Telesat'
+Fraction = 3            # gsl-capacity * fraction: 允许的最大流量上限。fraction 通常用于模拟网络负载系数
+Test_type = 'Latency'  # 'Latency' 'Rates'
+Test_length = 3        # Length of the test in seconds
+Max_Hops = 110
 
 # =============================================================================
 # 2. Physical Constants
@@ -39,20 +43,21 @@ min_rate= 10e3  # Minimum rate in kbps
 balancedFlow= False         # if set to true all the generated traffic at each GT is equal
 totalFlow   = 2*1000000000  # Total average flow per GT when the balanced traffc option is enabled. Malaga has 3*, LA has 3*, Nuuk/500
 avUserLoad  = 15593 * 8      # average traffic usage per second in bits
-
+flowGenType = "Step"       # 函数支持两种计算用户流量贡献的方式, "Step"只要用户在覆盖范围内（cellsInRange），无论距离 GT 多远，每个用户产生的流量都是一样的 "Slope"用户产生的流量随距离线性衰减。
 # Block
 BLOCK_SIZE   = 64800
 
 # =============================================================================
 # 4. Movement & Constellation
 # =============================================================================
-movementTime= 0.5       # Every movementTime seconds, the satellites positions are updated and the graph is built again
+movementTime= 0.1       # Every movementTime seconds, the satellites positions are updated and the graph is built again
                         # If do not want the constellation to move, set this parameter to a bigger number than the simulation time
 ndeltas     = 5805.44/20 #1 Movement speedup factor. Every movementTime sats will move movementTime*ndeltas space. If bigger, will make the rotation distance bigger
 
 saveISLs    = True     # save ISLs map
 const_moved = False     # Movement flag. If up, it means it has moved
 matching    = 'Positive_Grid'  # ['Markovian', 'Greedy', 'Positive_Grid']
+shortest_path_weight = 'slant_range'  # ['hops', 'dataRate', 'slant_range']
 minElAngle  = 30        # For satellites. Value is taken from NGSO constellation design chapter.
 mixLocs     = False     # If true, every time we make a new simulation the locations are going to change their order of selection
 rotateFirst = False     # If True, the constellation starts rotated by 1 movement defined by ndeltas

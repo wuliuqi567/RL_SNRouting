@@ -5,6 +5,7 @@ from torch.nn import Module
 import torch
 import numpy as np
 import os
+import re
 
 from Utils.utilsfunction import *
 from Utils.statefunction import *
@@ -14,55 +15,16 @@ from Algorithm.learner.mhgnnddqn_learner import MHGNNDDQNLearner
 from dgl import DGLGraph
 import dgl, random
 import argparse
-import yaml
+from .base_agent import get_configs, save_configs
+import system_configure
 
-def get_configs(file_dir):
-    """Get dict variable from a YAML file.
-    Args:
-        file_dir: the directory of the YAML file.
-
-    Returns:
-        config_dict: the keys and corresponding values in the YAML file.
-    """
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    base_config_file_dir = os.path.join(current_dir, "../algo_config/base_config.yaml")
-    
-    with open(base_config_file_dir, "r") as f:
-        try:
-            base_config_dict = yaml.load(f, Loader=yaml.FullLoader)
-        except yaml.YAMLError as exc:
-            assert False, base_config_file_dir + " error: {}".format(exc)
-
-    # file_dir is passed as relative path like "../algo_config/gnn_pd.yaml"
-    # We assume it is relative to this file (mhgnn_agent.py)
-    config_file_path = os.path.join(current_dir, file_dir)
-    
-    with open(config_file_path, "r") as f:
-        try:
-            config_dict = yaml.load(f, Loader=yaml.FullLoader)
-            config_dict.update(base_config_dict)
-        except yaml.YAMLError as exc:
-            assert False, config_file_path + " error: {}".format(exc)
-    return config_dict
-
-def save_configs(configs_dict, save_path):
-    """Save dict variable to a YAML file.
-    Args:
-        configs_dict: the dict variable to be saved.
-        save_path: the directory to save the YAML file.
-    """
-    with open(save_path, "w") as f:
-        try:
-            yaml.dump(configs_dict, f)
-        except yaml.YAMLError as exc:
-            assert False, save_path + " error: {}".format(exc)
 
 
 class MHGNNAgent(BaseAgent):
     def __init__(self):
         configs_dict = get_configs("../algo_config/gnn_pd.yaml")
         config = argparse.Namespace(**configs_dict)
-        # save_configs(configs_dict, os.path.join(config.outputPath, "configs_used.yaml"))
+        
         super(MHGNNAgent, self).__init__(config)
         # Additional initialization for MHGNNAgent can be added here
         self.n_order_adj = config.n_order_adj
@@ -76,6 +38,8 @@ class MHGNNAgent(BaseAgent):
         self.use_student_network = config.use_student_network
         if not self.train_TA_model:
             self.load_model()
+        else:
+            save_configs(configs_dict, self.model_dir_save)
 
         self.nTrain = config.nTrain
         self.step = 0
@@ -133,50 +97,63 @@ class MHGNNAgent(BaseAgent):
 
 
     def makeDeepAction(self, block, sat, g, earth, prevSat=None, *args):
-        linkedSats = getDeepLinkedSats(sat)
+        """
+        Docstring for makeDeepAction
+        
+        if block reaches destination, return 0
+        if no available action, return -2
+        if exceed max hops, return -1
+        else return nextHop: ['18_20', -133.12012370027912, 42.210392220392556] dest.ID, longitude, latitude
+        """
+        # 1. Configuration and Status
+        recalculate_flag = args and args[0] == 'recalculate'
+        training_mode = self.train_TA_model and not recalculate_flag
+        
+        is_reached = sat.linkedGT and block.destination.ID == sat.linkedGT.ID
+        is_failure = len(block.QPath) > system_configure.Max_Hops and not is_reached
+        
+        # 2. Handle Terminal States (Success or Failure)
+        if is_reached or is_failure:
+            if training_mode and prevSat is not None:
+                new_state_g_dgl = get_subgraph_state(block, sat, g, earth, n_order=self.n_order_adj)
+                self.step += 1
+                reward = self._calculate_reward_v1(block, sat, prevSat, is_terminal=is_reached, is_failure=is_failure)
+                self.store_experience(block, reward, new_state_g_dgl, True, sat, earth)
+                self.log_infos_no_index({"Reward": sum(block.stepReward) if block.stepReward else reward})
+            return -1 if is_failure else 0
+
+        # 3. Prepare State
+        linkedSats = getDeepLinkedSats(sat, g, earth)
         new_state_g_dgl = get_subgraph_state(block, sat, g, earth, n_order=self.n_order_adj)
         self.step += 1
 
-        if not self.train_TA_model:
-            nextHop, actIndex = self.getNextHop(new_state_g_dgl, linkedSats, sat, earth)
-            if nextHop == -1:
-                return 0
-            else:
-                return nextHop
-        
-        # Determine status
-        is_failure = len(block.QPath) > 110 and not (sat.linkedGT and block.destination.ID == sat.linkedGT.ID)
-        is_terminal = sat.linkedGT and block.destination.ID == sat.linkedGT.ID
-        
-        if is_failure or is_terminal:
-            reward = self._calculate_reward_v1(block, sat, prevSat, is_terminal=is_terminal, is_failure=is_failure)
-            self.store_experience(block, reward, new_state_g_dgl, True, sat, earth)
-            self.log_infos_no_index({"Reward": sum(block.stepReward) if block.stepReward else reward})
-            return -1 if is_failure else 0
-
-        # Select Action
+        # 4. Get Action
         nextHop, actIndex = self.getNextHop(new_state_g_dgl, linkedSats, sat, earth)
-        self.log_infos_no_index({"epsilon": self.epsilon[-1][0] if self.epsilon else 0.0})
-
-        if nextHop == -1:
-            return 0
-
-        # Intermediate Step Reward
-        if prevSat is not None:
-            reward = self._calculate_reward_v1(block, sat, prevSat)
-            self.store_experience(block, reward, new_state_g_dgl, False, sat, earth)
-
-        # Train
-        if self.step % self.nTrain == 0:
-            self.train(sat, earth)
         
-        self.updateF_count += 1
-        if self.updateF_count == self.updateF:
-            self.policy.hard_update_target()
-            self.updateF_count = 0
+        if nextHop == -1:
+            if not training_mode:
+                print(f"Error in nextHop calculation: Sat {sat.ID}, block {block}")
+            return -2
 
-        block.oldState = new_state_g_dgl
-        block.oldAction = actIndex
+        # 5. Training Logic (Only in training mode)
+        if training_mode:
+            self.log_infos_no_index({"epsilon": self.epsilon[-1][0] if self.epsilon else 0.0})
+            
+            if prevSat is not None:
+                reward = self._calculate_reward_v1(block, sat, prevSat)
+                self.store_experience(block, reward, new_state_g_dgl, False, sat, earth)
+
+            if self.step % self.nTrain == 0:
+                self.train(sat, earth)
+            
+            self.updateF_count += 1
+            if self.updateF_count == self.updateF:
+                self.policy.hard_update_target()
+                self.updateF_count = 0
+
+            block.oldState = new_state_g_dgl
+            block.oldAction = actIndex
+
         return nextHop
 
     def train(self, sat, earth):
@@ -190,11 +167,18 @@ class MHGNNAgent(BaseAgent):
         earth.trains.append([sat.env.now])
         
 
-    def store_experience(self, block, reward, new_state, is_terminal, sat, earth):
-        block.stepReward.append(reward)
+    def store_experience(self, block, reward, new_state, is_terminal, sat, earth, recalculate_flag=False):
+        if not recalculate_flag:
+            block.stepReward.append(reward)
+        else:
+            if block.stepReward:
+                block.stepReward[-1] = reward
+            else:
+                block.stepReward.append(reward)
         self.memory.store(block.oldState, block.oldAction, reward, new_state, is_terminal)
         if is_terminal:
             earth.rewards.append([sum(block.stepReward), sat.env.now])
+
 
 
     def _calculate_reward_v1(self, block, sat, prevSat, is_terminal=False, is_failure=False):
@@ -258,12 +242,25 @@ class MHGNNAgent(BaseAgent):
     def load_model(self):
         # load neural networks
         model_name = 'mhgnn_model.pth'
-        qNet_model_path = os.path.join(self.model_dir_save, 'qNet_' + model_name)
-        qTarget_model_path = os.path.join(self.model_dir_save, 'qTarget_' + model_name)
-        sNet_model_path = os.path.join(self.model_dir_save, 'sNet_' + model_name)
-        self.policy.qNetwork.load_state_dict(torch.load(qNet_model_path, map_location=self.device))
-        self.policy.qTarget.load_state_dict(torch.load(qTarget_model_path, map_location=self.device))
-        self.policy.sNetwork.load_state_dict(torch.load(sNet_model_path, map_location=self.device))
+        
+        # Fix for loading model from train directory when testing
+        model_dir = self.model_dir_save
+        if 'test_teacher_network' in model_dir:
+            model_dir = re.sub(r'test_teacher_network\d*', 'train', model_dir)
+        elif 'test_student_network' in model_dir:
+            model_dir = re.sub(r'test_student_network\d*', 'train', model_dir)
+        
+        if not os.path.isabs(model_dir):
+             model_dir = os.path.join(self.outputPath, '../train/', model_dir)
+
+        qNet_model_path = os.path.join(model_dir, 'qNet_' + model_name)
+        qTarget_model_path = os.path.join(model_dir, 'qTarget_' + model_name)
+        sNet_model_path = os.path.join(model_dir, 'sNet_' + model_name)
+
+        print("Loading model from:", qNet_model_path)
+        self.policy.qNetwork.load_state_dict(torch.load(qNet_model_path, map_location=self.device, weights_only=True))
+        self.policy.qTarget.load_state_dict(torch.load(qTarget_model_path, map_location=self.device, weights_only=True))
+        self.policy.sNetwork.load_state_dict(torch.load(sNet_model_path, map_location=self.device, weights_only=True))
 
     def try_save_model(self):
         if self.train_TA_model:
