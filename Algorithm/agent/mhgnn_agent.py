@@ -68,7 +68,7 @@ class MHGNNAgent(BaseAgent):
                 earth.rewards.append([unavPenalty, sat.env.now])
                 actIndex = random.randrange(self.actionSize)
                 action = self.actions[actIndex]
-        else:            
+        else:
             with torch.no_grad():
                 if self.use_student_network:
                     self.policy.sNetwork.eval()
@@ -144,12 +144,12 @@ class MHGNNAgent(BaseAgent):
                 self.store_experience(block, reward, new_state_g_dgl, False, sat, earth)
 
             if self.step % self.nTrain == 0:
-                self.train(sat, earth)
+                self.train(sat, earth) # whether adding train_epoch here needs to be considered
             
-            self.updateF_count += 1
-            if self.updateF_count == self.updateF:
-                self.policy.hard_update_target()
-                self.updateF_count = 0
+                self.updateF_count += 1
+                if self.updateF_count == self.updateF:
+                    self.policy.hard_update_target()
+                    self.updateF_count = 0
 
             block.oldState = new_state_g_dgl
             block.oldAction = actIndex

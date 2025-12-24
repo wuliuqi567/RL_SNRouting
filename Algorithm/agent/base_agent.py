@@ -37,10 +37,11 @@ def get_configs(file_dir):
     with open(config_file_path, "r") as f:
         try:
             config_dict = yaml.load(f, Loader=yaml.FullLoader)
-            config_dict.update(base_config_dict)
+            # Let the experiment-specific config override the base config.
+            base_config_dict.update(config_dict)
         except yaml.YAMLError as exc:
             assert False, config_file_path + " error: {}".format(exc)
-    return config_dict
+    return base_config_dict
 
 def save_configs(configs_dict, save_path):
     """Save dict variable to a YAML file.

@@ -101,7 +101,7 @@ class Earth:
                 constellation.rotate(ndeltas*deltaT)
 
         # Simpy process for handling moving the constellation and the satellites within the constellation
-        self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+        # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
 
     def set_window(self, window):  # function to change/set window for the earth
         """

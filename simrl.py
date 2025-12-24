@@ -9,7 +9,7 @@ import time
 import traceback
 
 import sys
-from Algorithm.agent.mhgnn_agent import MHGNNAgent
+# from Algorithm.agent.mhgnn_agent import MHGNNAgent
 from Utils.logger import Logger
 from Utils.utilsfunction import *
 from system_configure import *
@@ -333,7 +333,7 @@ if __name__ == '__main__':
     yaml_ruamel.indent(mapping=2, sequence=4, offset=2)
     
     config_file = "./Algorithm/algo_config/base_config.yaml"
-    test_outputPath = "SimResults/MHGNN/2025-12-15/21-27-56_Starlink_0.5s_GTs_[2]/"
+    # test_outputPath = "SimResults/DDQN/2025-12-24/15-15-52_Starlink_3s_GTs_[2]_1adj/"
 
     with open(config_file, "r") as f:
         config_data = yaml_ruamel.load(f)
@@ -341,6 +341,7 @@ if __name__ == '__main__':
     agent_name = config_data['agent']
     if agent_name in REGISTRY_Agents:
         agent_class = REGISTRY_Agents[agent_name]
+    
     
     current_dir = os.getcwd()
     if config_data["train_TA_model"]:
@@ -353,10 +354,11 @@ if __name__ == '__main__':
         outputPath      = current_dir + f'/SimResults/{agent_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/train/'
         os.makedirs(outputPath, exist_ok=True) 
     else:
+        mode_load_dir = config_data.get('mode_load_dir', None)
         if config_data['use_student_network']:
-            outputPath = os.path.join(current_dir, test_outputPath + 'test_student_network/')
+            outputPath = os.path.join(current_dir, mode_load_dir + 'test_student_network/')
         else:
-            outputPath = os.path.join(current_dir, test_outputPath + 'test_teacher_network2/')
+            outputPath = os.path.join(current_dir, mode_load_dir + 'test_teacher_network/')
         if not os.path.exists(outputPath):
             os.makedirs(outputPath)
     sys.stdout = Logger(outputPath + 'logfile.log')

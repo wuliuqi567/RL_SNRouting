@@ -10,22 +10,22 @@ from Utils.utilsfunction import *
 from Utils.statefunction import *
 from .base_agent import BaseAgent
 
-from Algorithm.learner.mpnn_learner import MPNNLearner
+from Algorithm.learner.ddqn_learner import DDQN_learner
 from dgl import DGLGraph
 import dgl, random
 import argparse
 from .base_agent import get_configs, save_configs
 import torch.nn as nn
 import torch.nn.functional as F
-from dgl.nn.pytorch import GraphConv, AvgPooling
+from dgl.nn.pytorch import GATConv
 
 
-class MPNNAgent(BaseAgent):
+class DDQNAgent(BaseAgent):
     def __init__(self, config: Namespace | None = None):
-        configs_dict = get_configs("../algo_config/mpnn.yaml")
+        configs_dict = get_configs("../algo_config/ddqn.yaml")
         config = argparse.Namespace(**configs_dict)
         # save_configs(configs_dict, os.path.join(config.outputPath, "configs_used.yaml"))
-        super(MPNNAgent, self).__init__(config)
+        super(DDQNAgent, self).__init__(config)
         self.n_order_adj = config.n_order_adj
         self.actionSize = config.action_size
         self.actions = ('U', 'D', 'R', 'L')
@@ -50,10 +50,10 @@ class MPNNAgent(BaseAgent):
 
 
     def _build_policy(self) -> Module:
-        return MPNNNetwork(self.config)
+        return DDQNNetwork(self.config)
 
     def _build_learner(self, *args):
-        return MPNNLearner(self.config, self.policy)
+        return DDQN_learner(self.config, self.policy)
     
     def getNextHop(self, newState: DGLGraph, linkedSats, sat, earth):
         # 转换状态为PyTorch张量并移动到设备
@@ -236,7 +236,7 @@ class MPNNAgent(BaseAgent):
 
     def load_model(self):
         # load neural networks
-        model_name = 'mpnn_model.pth'
+        model_name = 'ddqn_model.pth'
         
         # Fix for loading model from train directory when testing
         model_dir = self.model_dir_save
@@ -259,11 +259,11 @@ class MPNNAgent(BaseAgent):
 
     def try_save_model(self):
         if self.train_TA_model:
-            self.save_model(model_name='mpnn_model.pth')
+            self.save_model(model_name='ddqn_model.pth')
 
-class MPNNNetwork(Module):
+class DDQNNetwork(Module):
     def __init__(self, config: Namespace):
-        super(MPNNNetwork, self).__init__()
+        super(DDQNNetwork, self).__init__()
         # Initialize the MHGNN network components here based on config
         
         if torch.cuda.is_available():
@@ -274,7 +274,7 @@ class MPNNNetwork(Module):
         # self.n_order_adj = config.n_order_adj
         self.tau = config.tau
 
-        self.qNetwork = MPNNModel(config.input_dim, config.hidden_feats, config.num_layers, config.mlp_hidden_feats, config.action_size, config.n_order_adj).to(self.device)
+        self.qNetwork = DDQNModel(config.input_dim, config.hidden_feats, config.mlp_hidden_feats, config.action_size, config.n_order_adj).to(self.device)
 
         self.qTarget = deepcopy(self.qNetwork).to(self.device)
         self.sNetwork = deepcopy(self.qNetwork).to(self.device)
@@ -288,58 +288,60 @@ class MPNNNetwork(Module):
         self.sNetwork.load_state_dict(self.qNetwork.state_dict())
 
 
-class MPNNModel(nn.Module):
-    def __init__(self, in_feats, hidden_feats, num_layers, mlp_hidden_feats, out_classes, n_order_adj):
-        super(MPNNModel, self).__init__()
+class DDQNModel(nn.Module):
+    def __init__(self, in_feats, hidden_feats, mlp_hidden_feats, out_classes, n_order_adj):
+        super(DDQNModel, self).__init__()
         
-        self.layers = nn.ModuleList()
-        # Layer 1
-        self.layers.append(GraphConv(in_feats, hidden_feats, allow_zero_in_degree=True))
-        # Subsequent layers
-        for _ in range(num_layers - 1):
-            self.layers.append(GraphConv(hidden_feats, hidden_feats, allow_zero_in_degree=True))
+        # 1. 用于特征提取
+        self.linear = nn.Linear(in_feats, 8)  # 假设我们使用5个节点的特征拼接作为输入
+        # 2. 计算 MLP 的输入维度
+        self.num_nodes = 2 * n_order_adj * (n_order_adj + 1) + 1  # 计算子图中的节点数
+        mlp_in_dim = hidden_feats * self.num_nodes  # 假设我们使用5个节点的特征拼接作为输入
         
-        # Calculate number of nodes based on n_order_adj
-        # Formula: 2 * n_order_adj * (n_order_adj + 1) + 1
-        self.num_nodes = 2 * n_order_adj * (n_order_adj + 1) + 1
-        
-        # MLP input dimension
-        # We concatenate features of all nodes
-        mlp_in_dim = hidden_feats * self.num_nodes
-        
+        # 3. MLP 层：用于决策
         self.mlp = nn.Sequential(
             nn.Linear(mlp_in_dim, mlp_hidden_feats),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.5), # 防止过拟合
             nn.Linear(mlp_hidden_feats, out_classes)
         )
 
     def forward(self, h, g=None):
+        """Forward pass.
+
+        The rest of this repo follows the pattern:
+          model.g = dgl_graph
+          q_values = model(node_features)
+
+        So we support both (h) and (h, g).
+        """
         if g is None:
             g = getattr(self, 'g', None)
         if g is None:
-            raise TypeError("MPNNModel.forward requires a DGLGraph via argument 'g' or by setting self.g")
+            raise TypeError("DDQNModel.forward requires a DGLGraph via argument 'g' or by setting self.g")
 
-        # MPNN layers
-        for i, layer in enumerate(self.layers):
-            h = layer(g, h)
-            if i < len(self.layers) - 1:
-                h = F.relu(h)
-        
-        # Flatten/Reshape logic
+        # --- 第一步：特征提取 ---
+        # h 的形状: (N, in_feats)
+        # linear_out 的形状: (N, hidden_feats)
+        linear_out = self.linear(h)
+
+        # --- 第二步：处理多头维度 (关键步骤) ---
         total_nodes = g.num_nodes()
         batch_size = getattr(g, 'batch_size', None)
         if batch_size is None:
             if total_nodes % self.num_nodes != 0:
-                 # Fallback or error if graph size doesn't match expected node count
-                 # For robustness, we can try to infer batch size or raise error
-                 batch_size = total_nodes // self.num_nodes
+                # Fallback or error if graph size doesn't match expected node count
+                batch_size = total_nodes // self.num_nodes
             else:
-                 batch_size = total_nodes // self.num_nodes
-
-        # Reshape to (batch_size, num_nodes * hidden_feats)
-        feature_embedding = h.reshape(batch_size, -1)
-        feature_embedding = F.elu(feature_embedding)
+                batch_size = total_nodes // self.num_nodes
         
+        feature_embedding = linear_out.reshape(batch_size, -1)
+        
+        # 可以在这里加一个激活函数，比如 ELU (GAT 论文常用)
+        feature_embedding = F.elu(feature_embedding)
+
+        # --- 第三步：MLP 决策 ---
+        # logits 的形状: (N, out_classes)
         logits = self.mlp(feature_embedding)
+        
         return logits

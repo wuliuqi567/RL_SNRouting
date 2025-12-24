@@ -1,0 +1,39 @@
+
+# base config
+agent: 'GAT' #
+project_name: "satNetEnv_OneHopGAT"
+
+# environment parameters
+n_order_adj: 4 # number of order for adjacency matrix
+
+
+#gat parameters
+input_dim: 10
+num_layers: 3 # corresponding to modifying n_order_adj
+num_heads: 2
+gat_hidden_feats: 8
+mlp_hidden_feats: 32
+action_size: 4
+
+#gat learner parameters
+gamma: 0.99
+learning_rate: 0.002
+lr_decay_steps: 100000
+student_learning_rate: 0.0005
+student_lr_decay_steps: 50000
+# pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
+
+## replay buffer parameters
+buffer_size: 1000000
+batch_size: 128
+
+## exploration / target update parameters
+tau: 0.01
+MAX_EPSILON: 0.99
+MIN_EPSILON: 0.001
+LAMBDA: 0.0005
+decayRate: 50
+
+# training parameters
+nTrain: 120         # The teacher network will train every nTrain steps
+updateF: 23      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up

@@ -10,22 +10,22 @@ from Utils.utilsfunction import *
 from Utils.statefunction import *
 from .base_agent import BaseAgent
 
-from Algorithm.learner.mpnn_learner import MPNNLearner
+from Algorithm.learner.gatddqn_learner import GATLearner
 from dgl import DGLGraph
 import dgl, random
 import argparse
 from .base_agent import get_configs, save_configs
 import torch.nn as nn
 import torch.nn.functional as F
-from dgl.nn.pytorch import GraphConv, AvgPooling
+from dgl.nn.pytorch import GATConv
 
 
-class MPNNAgent(BaseAgent):
+class GATAgent(BaseAgent):
     def __init__(self, config: Namespace | None = None):
-        configs_dict = get_configs("../algo_config/mpnn.yaml")
+        configs_dict = get_configs("../algo_config/gat.yaml")
         config = argparse.Namespace(**configs_dict)
         # save_configs(configs_dict, os.path.join(config.outputPath, "configs_used.yaml"))
-        super(MPNNAgent, self).__init__(config)
+        super(GATAgent, self).__init__(config)
         self.n_order_adj = config.n_order_adj
         self.actionSize = config.action_size
         self.actions = ('U', 'D', 'R', 'L')
@@ -50,10 +50,10 @@ class MPNNAgent(BaseAgent):
 
 
     def _build_policy(self) -> Module:
-        return MPNNNetwork(self.config)
+        return GATNetwork(self.config)
 
     def _build_learner(self, *args):
-        return MPNNLearner(self.config, self.policy)
+        return GATLearner(self.config, self.policy)
     
     def getNextHop(self, newState: DGLGraph, linkedSats, sat, earth):
         # 转换状态为PyTorch张量并移动到设备
@@ -236,7 +236,7 @@ class MPNNAgent(BaseAgent):
 
     def load_model(self):
         # load neural networks
-        model_name = 'mpnn_model.pth'
+        model_name = 'mhgnn_model.pth'
         
         # Fix for loading model from train directory when testing
         model_dir = self.model_dir_save
@@ -259,11 +259,11 @@ class MPNNAgent(BaseAgent):
 
     def try_save_model(self):
         if self.train_TA_model:
-            self.save_model(model_name='mpnn_model.pth')
+            self.save_model(model_name='mhgnn_model.pth')
 
-class MPNNNetwork(Module):
+class GATNetwork(Module):
     def __init__(self, config: Namespace):
-        super(MPNNNetwork, self).__init__()
+        super(GATNetwork, self).__init__()
         # Initialize the MHGNN network components here based on config
         
         if torch.cuda.is_available():
@@ -273,8 +273,11 @@ class MPNNNetwork(Module):
 
         # self.n_order_adj = config.n_order_adj
         self.tau = config.tau
+        
+        num_layers = getattr(config, 'num_layers', 1)
+        n_order_adj = getattr(config, 'n_order_adj', 1)
 
-        self.qNetwork = MPNNModel(config.input_dim, config.hidden_feats, config.num_layers, config.mlp_hidden_feats, config.action_size, config.n_order_adj).to(self.device)
+        self.qNetwork = GATModel(config.input_dim, config.gat_hidden_feats, config.num_heads, num_layers, config.mlp_hidden_feats, config.action_size, n_order_adj).to(self.device)
 
         self.qTarget = deepcopy(self.qNetwork).to(self.device)
         self.sNetwork = deepcopy(self.qNetwork).to(self.device)
@@ -288,58 +291,74 @@ class MPNNNetwork(Module):
         self.sNetwork.load_state_dict(self.qNetwork.state_dict())
 
 
-class MPNNModel(nn.Module):
-    def __init__(self, in_feats, hidden_feats, num_layers, mlp_hidden_feats, out_classes, n_order_adj):
-        super(MPNNModel, self).__init__()
+class GATModel(nn.Module):
+    def __init__(self, in_feats, gat_hidden_feats, num_heads, num_layers, mlp_hidden_feats, out_classes, n_order_adj):
+        super(GATModel, self).__init__()
         
         self.layers = nn.ModuleList()
-        # Layer 1
-        self.layers.append(GraphConv(in_feats, hidden_feats, allow_zero_in_degree=True))
-        # Subsequent layers
-        for _ in range(num_layers - 1):
-            self.layers.append(GraphConv(hidden_feats, hidden_feats, allow_zero_in_degree=True))
+        self.num_layers = num_layers
         
-        # Calculate number of nodes based on n_order_adj
-        # Formula: 2 * n_order_adj * (n_order_adj + 1) + 1
+        # Layer 1
+        self.layers.append(GATConv(in_feats, gat_hidden_feats, num_heads=num_heads, allow_zero_in_degree=True))
+        
+        # Subsequent layers
+        # Input dim is previous layer's hidden_feats * num_heads (because we flatten heads)
+        for _ in range(num_layers - 1):
+            self.layers.append(GATConv(gat_hidden_feats * num_heads, gat_hidden_feats, num_heads=num_heads, allow_zero_in_degree=True))
+        
+        # Calculate num_nodes
         self.num_nodes = 2 * n_order_adj * (n_order_adj + 1) + 1
         
         # MLP input dimension
         # We concatenate features of all nodes
-        mlp_in_dim = hidden_feats * self.num_nodes
+        # Each node has feature dim: gat_hidden_feats * num_heads
+        mlp_in_dim = self.num_nodes * gat_hidden_feats * num_heads
         
         self.mlp = nn.Sequential(
             nn.Linear(mlp_in_dim, mlp_hidden_feats),
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.5), # 防止过拟合
             nn.Linear(mlp_hidden_feats, out_classes)
         )
 
     def forward(self, h, g=None):
+        """Forward pass.
+
+        The rest of this repo follows the pattern:
+          model.g = dgl_graph
+          q_values = model(node_features)
+
+        So we support both (h) and (h, g).
+        """
         if g is None:
             g = getattr(self, 'g', None)
         if g is None:
-            raise TypeError("MPNNModel.forward requires a DGLGraph via argument 'g' or by setting self.g")
+            raise TypeError("GATModel.forward requires a DGLGraph via argument 'g' or by setting self.g")
 
-        # MPNN layers
+        # --- GAT Layers ---
         for i, layer in enumerate(self.layers):
-            h = layer(g, h)
-            if i < len(self.layers) - 1:
-                h = F.relu(h)
-        
-        # Flatten/Reshape logic
+            h = layer(g, h) # (N, num_heads, hidden_feats)
+            h = h.flatten(1) # (N, num_heads * hidden_feats)
+            
+            if i < self.num_layers - 1:
+                h = F.elu(h)
+
+        # --- 处理多头维度 & Flatten ---
         total_nodes = g.num_nodes()
         batch_size = getattr(g, 'batch_size', None)
         if batch_size is None:
             if total_nodes % self.num_nodes != 0:
-                 # Fallback or error if graph size doesn't match expected node count
-                 # For robustness, we can try to infer batch size or raise error
-                 batch_size = total_nodes // self.num_nodes
+                batch_size = total_nodes // self.num_nodes
             else:
-                 batch_size = total_nodes // self.num_nodes
-
-        # Reshape to (batch_size, num_nodes * hidden_feats)
-        feature_embedding = h.reshape(batch_size, -1)
-        feature_embedding = F.elu(feature_embedding)
+                batch_size = total_nodes // self.num_nodes
         
+        feature_embedding = h.reshape(batch_size, -1)
+        
+        # 可以在这里加一个激活函数，比如 ELU (GAT 论文常用)
+        feature_embedding = F.elu(feature_embedding)
+
+        # --- MLP 决策 ---
+        # logits 的形状: (N, out_classes)
         logits = self.mlp(feature_embedding)
+        
         return logits

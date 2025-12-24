@@ -8,9 +8,9 @@ from dgl import DGLGraph
 import dgl
 from Algorithm.common.pd_loss_fun import kl_distillation_loss, kl_distillation_loss_v2
 
-class GATLearner(BaseLearner):
+class DDQN_learner(BaseLearner):
     def __init__(self, config: Namespace, policy: Module):
-        super(GATLearner, self).__init__(config, policy)
+        super(DDQN_learner, self).__init__(config, policy)
         self.optimizer = torch.optim.Adam(self.policy.qNetwork.parameters(), lr=config.learning_rate)
         self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=0.5, total_iters=config.lr_decay_steps)
 

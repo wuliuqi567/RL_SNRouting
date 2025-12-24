@@ -37,9 +37,9 @@ tau         : 0.01       # rate of copying the weights from the Q-Network to the
 MAX_EPSILON : 0.99      # Maximum value that the exploration parameter can have
 MIN_EPSILON : 0.001     # Minimum value that the exploration parameter can have
 LAMBDA      : 0.0005   # This value is used to decay the epsilon in the deep learning implementation
-decayRate   : 30    # Decay rate for epsilon decay in deep learning implementation
+decayRate   : 50    # Decay rate for epsilon decay in deep learning implementation
 
-updateF     : 2500      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
+updateF     : 23      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
 gamma: 0.99
 
 nTrain      : 120         # The teacher network will train every nTrain steps
