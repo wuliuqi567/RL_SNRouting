@@ -1,342 +1,152 @@
+CPyCppyy==1.13.0
+Jinja2==3.1.2
+Markdown==3.4.1
+MarkupSafe==2.1.1
+Pillow==9.1.1
+PyBindGen==0.22.1
+PyYAML==6.0.3
+Pygments==2.13.0
+Werkzeug==2.2.2
+absl-py==1.3.0
+annotated-types==0.7.0
 appnope==0.1.3
+arcade==2.6.16
+asttokens==2.0.8
 astunparse==1.6.3
-  wheel==0.45.1
-  six==1.16.0
+attrs==22.1.0
+backcall==0.2.0
+boto3==1.41.4
+botocore==1.41.4
+branca==0.6.0
+cachetools==5.2.1
+certifi==2023.11.17
+cffi==1.15.1
+charset-normalizer==2.1.1
+click==8.3.1
+cloudpickle==2.2.0
 colorama==0.4.5
+cppyy-backend==1.15.3
+cppyy-cling==6.32.8
 cppyy==3.5.0
-  CPyCppyy==1.13.0
-    cppyy-cling==6.32.8
-    cppyy-backend==1.15.3
-      cppyy-cling==6.32.8
-  cppyy-backend==1.15.3
-    cppyy-cling==6.32.8
-  cppyy-cling==6.32.8
+cycler==0.11.0
+debugpy==1.6.3
+decorator==5.1.1
 dgl==2.4.0+cu118
-  networkx==2.6.3
-  numpy==1.22.4
-  packaging==25.0
-  pandas==1.4.3
-    python-dateutil==2.8.2
-      six==1.16.0
-    pytz==2022.2.1
-    numpy==1.22.4
-  psutil==5.9.2
-  pydantic==2.12.4
-    annotated-types==0.7.0
-    pydantic_core==2.41.5
-      typing_extensions==4.15.0
-    typing_extensions==4.15.0
-    typing-inspection==0.4.2
-      typing_extensions==4.15.0
-  PyYAML==6.0.3
-  requests==2.28.1
-    charset-normalizer==2.1.1
-    idna==3.4
-    urllib3==1.26.13
-    certifi==2023.11.17
-  scipy==1.8.1
-    numpy==1.22.4
-  tqdm==4.67.1
-  torch==2.4.0+cu118
-    filelock==3.19.1
-    typing_extensions==4.15.0
-    sympy==1.14.0
-      mpmath==1.3.0
-    networkx==2.6.3
-    Jinja2==3.1.2
-      MarkupSafe==2.1.1
-    fsspec==2025.9.0
-    nvidia-cuda-nvrtc-cu11==11.8.89
-    nvidia-cuda-runtime-cu11==11.8.89
-    nvidia-cuda-cupti-cu11==11.8.87
-    nvidia-cudnn-cu11==9.1.0.70
-      nvidia-cublas-cu11==11.11.3.6
-    nvidia-cublas-cu11==11.11.3.6
-    nvidia-cufft-cu11==10.9.0.58
-    nvidia-curand-cu11==10.3.0.86
-    nvidia-cusolver-cu11==11.4.1.48
-      nvidia-cublas-cu11==11.11.3.6
-    nvidia-cusparse-cu11==11.7.5.86
-    nvidia-nccl-cu11==2.20.5
-    nvidia-nvtx-cu11==11.8.86
-    triton==3.0.0
-      filelock==3.19.1
 dill==0.3.7
+entrypoints==0.4
+executing==1.1.0
+filelock==3.19.1
 flatbuffers==23.5.26
 folium==0.14.0
-  branca==0.6.0
-    Jinja2==3.1.2
-      MarkupSafe==2.1.1
-  Jinja2==3.1.2
-    MarkupSafe==2.1.1
-  numpy==1.22.4
-  requests==2.28.1
-    charset-normalizer==2.1.1
-    idna==3.4
-    urllib3==1.26.13
-    certifi==2023.11.17
+fonttools==4.37.3
+fsspec==2025.9.0
 gast==0.4.0
+geographiclib==1.52
 geopy==2.2.0
-  geographiclib==1.52
+google-auth-oauthlib==1.0.0
+google-auth==2.16.0
 google-pasta==0.2.0
-  six==1.16.0
 graphviz==0.20.1
 gridworld==0.1
-  arcade==2.6.16
-    pyglet==2.0.dev23
-    Pillow==9.1.1
-    pymunk==6.2.1
-      cffi==1.15.1
-        pycparser==2.21
-    pytiled-parser==2.2.0
-      attrs==22.1.0
-      typing_extensions==4.15.0
-  numpy==1.22.4
+grpcio==1.51.1
 gym-gridworlds==0.0.2
-  gym==0.26.1
-    numpy==1.22.4
-    cloudpickle==2.2.0
-    gym-notices==0.0.8
-  numpy==1.22.4
+gym-notices==0.0.8
+gym==0.26.1
 h5py==3.7.0
-  numpy==1.22.4
+idna==3.4
 importlib-metadata==5.0.0
-  zipp==3.8.1
 ipykernel==6.16.0
-  debugpy==1.6.3
-  ipython==8.5.0
-    backcall==0.2.0
-    decorator==5.1.1
-    jedi==0.18.1
-      parso==0.8.3
-    matplotlib-inline==0.1.6
-      traitlets==5.4.0
-    pickleshare==0.7.5
-    prompt-toolkit==3.0.31
-      wcwidth==0.2.5
-    Pygments==2.13.0
-    stack-data==0.5.1
-      executing==1.1.0
-      asttokens==2.0.8
-        six==1.16.0
-      pure-eval==0.2.2
-    traitlets==5.4.0
-    pexpect==4.8.0
-      ptyprocess==0.7.0
-  jupyter_client==7.3.5
-    entrypoints==0.4
-    jupyter-core==4.11.1
-      traitlets==5.4.0
-    nest-asyncio==1.5.6
-    python-dateutil==2.8.2
-      six==1.16.0
-    pyzmq==24.0.1
-    tornado==6.2
-    traitlets==5.4.0
-  matplotlib-inline==0.1.6
-    traitlets==5.4.0
-  nest-asyncio==1.5.6
-  packaging==25.0
-  psutil==5.9.2
-  pyzmq==24.0.1
-  tornado==6.2
-  traitlets==5.4.0
+ipython==8.5.0
+jedi==0.18.1
+jmespath==1.0.1
+joblib==1.3.2
+jupyter-core==4.11.1
+jupyter_client==7.3.5
 keras==2.13.1
+kiwisolver==1.4.4
 libclang==15.0.6.1
+llvmlite==0.38.1
 lxml==4.9.3
+matplotlib-inline==0.1.6
+matplotlib==3.5.2
+mpmath==1.3.0
+nest-asyncio==1.5.6
+networkx==2.6.3
 numba==0.55.2
-  llvmlite==0.38.1
-  numpy==1.22.4
-  setuptools==80.9.0
+numpy==1.22.4
+nvidia-cublas-cu11==11.11.3.6
+nvidia-cuda-cupti-cu11==11.8.87
+nvidia-cuda-nvrtc-cu11==11.8.89
+nvidia-cuda-runtime-cu11==11.8.89
+nvidia-cudnn-cu11==9.1.0.70
+nvidia-cufft-cu11==10.9.0.58
+nvidia-curand-cu11==10.3.0.86
+nvidia-cusolver-cu11==11.4.1.48
+nvidia-cusparse-cu11==11.7.5.86
+nvidia-ml-py==13.580.82
+nvidia-nccl-cu11==2.20.5
+nvidia-nvtx-cu11==11.8.86
+oauthlib==3.2.2
 opt-einsum==3.3.0
-  numpy==1.22.4
+packaging==25.0
+pandas==1.4.3
+parso==0.8.3
+pexpect==4.8.0
+pickleshare==0.7.5
 pipdeptree==2.30.0
-  packaging==25.0
-  pip @ file:///home/task_176313218821961/conda-bld/pip_1763132220821/work
 plotting==0.0.7
-  matplotlib==3.5.2
-    cycler==0.11.0
-    fonttools==4.37.3
-    kiwisolver==1.4.4
-    numpy==1.22.4
-    packaging==25.0
-    Pillow==9.1.1
-    pyparsing==3.0.9
-    python-dateutil==2.8.2
-      six==1.16.0
-  seaborn==0.12.0
-    numpy==1.22.4
-    pandas==1.4.3
-      python-dateutil==2.8.2
-        six==1.16.0
-      pytz==2022.2.1
-      numpy==1.22.4
-    matplotlib==3.5.2
-      cycler==0.11.0
-      fonttools==4.37.3
-      kiwisolver==1.4.4
-      numpy==1.22.4
-      packaging==25.0
-      Pillow==9.1.1
-      pyparsing==3.0.9
-      python-dateutil==2.8.2
-        six==1.16.0
-  pandas==1.4.3
-    python-dateutil==2.8.2
-      six==1.16.0
-    pytz==2022.2.1
-    numpy==1.22.4
+prettytable==3.17.0
 progressbar==2.5
-PyBindGen==0.22.1
+prompt-toolkit==3.0.31
+protobuf==4.25.1
+psutil==5.9.2
+ptyprocess==0.7.0
+pure-eval==0.2.2
+pyasn1-modules==0.2.8
+pyasn1==0.4.8
+pycparser==2.21
+pydantic==2.12.4
+pydantic_core==2.41.5
 pydot==1.4.2
-  pyparsing==3.0.9
-ruamel.yaml==0.18.16
-  ruamel.yaml.clib==0.2.15
+pyecharts==2.0.9
+pyglet==2.0.dev23
+pymunk==6.2.1
+pynvml==13.0.1
+pyparsing==3.0.9
+python-dateutil==2.8.2
+pytiled-parser==2.2.0
+pytz==2022.2.1
+pyzmq==24.0.1
+requests-oauthlib==1.3.1
+requests==2.28.1
+rsa==4.9
+s3transfer==0.15.0
 scikit-learn==1.4.1.post1
-  numpy==1.22.4
-  scipy==1.8.1
-    numpy==1.22.4
-  joblib==1.3.2
-  threadpoolctl==3.3.0
+scipy==1.8.1
+seaborn==0.12.0
+setuptools==80.9.0
+simplejson==3.20.2
 simpy==4.0.1
+six==1.16.0
+stack-data==0.5.1
+swankit==0.2.0
 swanlab==0.6.1
-  boto3==1.41.4
-    botocore==1.41.4
-      jmespath==1.0.1
-      python-dateutil==2.8.2
-        six==1.16.0
-      urllib3==1.26.13
-    jmespath==1.0.1
-    s3transfer==0.15.0
-      botocore==1.41.4
-        jmespath==1.0.1
-        python-dateutil==2.8.2
-          six==1.16.0
-        urllib3==1.26.13
-  botocore==1.41.4
-    jmespath==1.0.1
-    python-dateutil==2.8.2
-      six==1.16.0
-    urllib3==1.26.13
-  click==8.3.1
-  psutil==5.9.2
-  pydantic==2.12.4
-    annotated-types==0.7.0
-    pydantic_core==2.41.5
-      typing_extensions==4.15.0
-    typing_extensions==4.15.0
-    typing-inspection==0.4.2
-      typing_extensions==4.15.0
-  pyecharts==2.0.9
-    Jinja2==3.1.2
-      MarkupSafe==2.1.1
-    prettytable==3.17.0
-      wcwidth==0.2.5
-    simplejson==3.20.2
-  pynvml==13.0.1
-    nvidia-ml-py==13.580.82
-  PyYAML==6.0.3
-  requests==2.28.1
-    charset-normalizer==2.1.1
-    idna==3.4
-    urllib3==1.26.13
-    certifi==2023.11.17
-  setuptools==80.9.0
-  swankit==0.2.0
-    PyYAML==6.0.3
-  urllib3==1.26.13
+sympy==1.14.0
+tensorboard-data-server==0.7.2
 tensorboard==2.13.0
-  absl-py==1.3.0
-  grpcio==1.51.1
-  google-auth==2.16.0
-    cachetools==5.2.1
-    pyasn1-modules==0.2.8
-      pyasn1==0.4.8
-    six==1.16.0
-    rsa==4.9
-      pyasn1==0.4.8
-  google-auth-oauthlib==1.0.0
-    google-auth==2.16.0
-      cachetools==5.2.1
-      pyasn1-modules==0.2.8
-        pyasn1==0.4.8
-      six==1.16.0
-      rsa==4.9
-        pyasn1==0.4.8
-    requests-oauthlib==1.3.1
-      oauthlib==3.2.2
-      requests==2.28.1
-        charset-normalizer==2.1.1
-        idna==3.4
-        urllib3==1.26.13
-        certifi==2023.11.17
-  Markdown==3.4.1
-  numpy==1.22.4
-  protobuf==4.25.1
-  requests==2.28.1
-    charset-normalizer==2.1.1
-    idna==3.4
-    urllib3==1.26.13
-    certifi==2023.11.17
-  setuptools==80.9.0
-  tensorboard-data-server==0.7.2
-  Werkzeug==2.2.2
-    MarkupSafe==2.1.1
-  wheel==0.45.1
 termcolor==2.2.0
 threaded==4.1.0
-torchaudio==2.4.0+cu118
-  torch==2.4.0+cu118
-    filelock==3.19.1
-    typing_extensions==4.15.0
-    sympy==1.14.0
-      mpmath==1.3.0
-    networkx==2.6.3
-    Jinja2==3.1.2
-      MarkupSafe==2.1.1
-    fsspec==2025.9.0
-    nvidia-cuda-nvrtc-cu11==11.8.89
-    nvidia-cuda-runtime-cu11==11.8.89
-    nvidia-cuda-cupti-cu11==11.8.87
-    nvidia-cudnn-cu11==9.1.0.70
-      nvidia-cublas-cu11==11.11.3.6
-    nvidia-cublas-cu11==11.11.3.6
-    nvidia-cufft-cu11==10.9.0.58
-    nvidia-curand-cu11==10.3.0.86
-    nvidia-cusolver-cu11==11.4.1.48
-      nvidia-cublas-cu11==11.11.3.6
-    nvidia-cusparse-cu11==11.7.5.86
-    nvidia-nccl-cu11==2.20.5
-    nvidia-nvtx-cu11==11.8.86
-    triton==3.0.0
-      filelock==3.19.1
-torchvision==0.19.0+cu118
-  numpy==1.22.4
-  torch==2.4.0+cu118
-    filelock==3.19.1
-    typing_extensions==4.15.0
-    sympy==1.14.0
-      mpmath==1.3.0
-    networkx==2.6.3
-    Jinja2==3.1.2
-      MarkupSafe==2.1.1
-    fsspec==2025.9.0
-    nvidia-cuda-nvrtc-cu11==11.8.89
-    nvidia-cuda-runtime-cu11==11.8.89
-    nvidia-cuda-cupti-cu11==11.8.87
-    nvidia-cudnn-cu11==9.1.0.70
-      nvidia-cublas-cu11==11.11.3.6
-    nvidia-cublas-cu11==11.11.3.6
-    nvidia-cufft-cu11==10.9.0.58
-    nvidia-curand-cu11==10.3.0.86
-    nvidia-cusolver-cu11==11.4.1.48
-      nvidia-cublas-cu11==11.11.3.6
-    nvidia-cusparse-cu11==11.7.5.86
-    nvidia-nccl-cu11==2.20.5
-    nvidia-nvtx-cu11==11.8.86
-    triton==3.0.0
-      filelock==3.19.1
-  Pillow==9.1.1
+threadpoolctl==3.3.0
+tornado==6.2
+tqdm==4.67.1
+traitlets==5.4.0
+triton==3.0.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
 tzdata==2025.2
+urllib3==1.26.13
+wcwidth==0.2.5
+wheel==0.45.1
 wincertstore==0.2
 wrapt==1.14.1
+zipp==3.8.1

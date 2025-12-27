@@ -18,6 +18,6 @@ input_dim: 10 # dimension of input each node features
 train_TA_model: false # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
-mode_load_dir: "SimResults/GAT/2025-12-24/16-59-06_Starlink_3s_GTs_[2]_4adj/"
-outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/GAT/2025-12-24/16-59-06_Starlink_3s_GTs_[2]_4adj/test_teacher_network/'
-CurrentGTnumber: 2
+mode_load_dir: "SimResults/GAT/2025-12-24/22-20-31_Starlink_3s_GTs_[4]/"
+outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/GAT/2025-12-24/22-20-31_Starlink_3s_GTs_[4]/test_teacher_network/'
+CurrentGTnumber: 4

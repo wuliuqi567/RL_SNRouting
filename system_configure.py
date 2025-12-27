@@ -2,7 +2,7 @@
 # 1. Simulation & Pathing Configuration
 # =============================================================================
 
-GTs = [2]               # number of gateways to be tested
+GTs = [4]               # number of gateways to be tested
 # Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
 # GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
 
