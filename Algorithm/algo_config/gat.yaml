@@ -21,6 +21,7 @@ learning_rate: 0.002
 lr_decay_steps: 100000
 student_learning_rate: 0.0005
 student_lr_decay_steps: 50000
+train_epoch: 4
 # pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
 
 ## replay buffer parameters
