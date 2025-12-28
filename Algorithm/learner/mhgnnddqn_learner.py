@@ -13,10 +13,10 @@ class MHGNNDDQNLearner(BaseLearner):
     def __init__(self, config: Namespace, policy: Module):
         super(MHGNNDDQNLearner, self).__init__(config, policy)
         self.optimizer = torch.optim.Adam(self.policy.qNetwork.parameters(), lr=config.learning_rate)
-        self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=0.5, total_iters=config.lr_decay_steps)
+        self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=0.2, total_iters=config.lr_decay_steps)
 
         self.student_optimizer = torch.optim.Adam(self.policy.sNetwork.parameters(), lr=config.student_learning_rate)
-        self.student_scheduler = torch.optim.lr_scheduler.LinearLR(self.student_optimizer, start_factor=1.0, end_factor=0.0, total_iters=config.student_lr_decay_steps)
+        self.student_scheduler = torch.optim.lr_scheduler.LinearLR(self.student_optimizer, start_factor=1.0, end_factor=0.1, total_iters=config.student_lr_decay_steps)
 
         self.gamma = config.gamma
 

@@ -43,6 +43,7 @@ class GATAgent(BaseAgent):
             save_configs(configs_dict, self.model_dir_save)
 
         self.nTrain = config.nTrain
+        self.train_epoch = hasattr(config, 'train_epoch') and config.train_epoch or 1
         self.step = 0
         self.updateF_count = 0
         self.updateF = config.updateF
@@ -154,9 +155,10 @@ class GATAgent(BaseAgent):
     def train(self, sat, earth):
         if self.memory.buffeSize < self.config.batch_size:
             return
-        samples = self.memory.getBatch(self.config.batch_size)
-        info = self.learner.update(samples, self.step)
-        self.log_infos_no_index(info)
+        for _ in range(self.train_epoch):
+            samples = self.memory.getBatch(self.config.batch_size)
+            info = self.learner.update(samples, self.step)
+            self.log_infos_no_index(info)
 
         earth.loss.append([info.get('rl_loss', 0.0), sat.env.now])
         earth.trains.append([sat.env.now])
