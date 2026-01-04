@@ -19,6 +19,7 @@ class MHGNNDDQNLearner(BaseLearner):
         self.student_scheduler = torch.optim.lr_scheduler.LinearLR(self.student_optimizer, start_factor=1.0, end_factor=0.1, total_iters=config.student_lr_decay_steps)
 
         self.gamma = config.gamma
+        self.temp = config.temperature
 
         if config.pd_loss == "MSE":
             self.pd_loss = nn.MSELoss()
@@ -89,7 +90,7 @@ class MHGNNDDQNLearner(BaseLearner):
             student_q_values = self.policy.sNetwork(pd_graph.ndata['pdfeat'])
             
             if self.config.pd_loss in ['KL', 'KL_V2']:
-                distill_loss = self.pd_loss(student_q_values, current_q_values.detach(), temperature=5.0)
+                distill_loss = self.pd_loss(student_q_values, current_q_values.detach(), temperature=self.temp)
             else:
                 distill_loss = self.pd_loss(student_q_values, current_q_values.detach())
             

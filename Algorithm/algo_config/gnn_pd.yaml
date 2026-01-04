@@ -28,7 +28,7 @@ head_tail_shared: 1
 # random_seed: 42
 
 pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
-
+temperature: 5.0
 
 ## replay buffer parameters
 buffer_size: 1000000
