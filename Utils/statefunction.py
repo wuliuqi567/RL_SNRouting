@@ -641,6 +641,10 @@ def get_subgraph_state(block, sat, g, earth, n_order=4):
         dgl_g.ndata['feat'] = torch.tensor(np.vstack(features), dtype=torch.float32)
         dgl_g.ndata['1st_order_feat'] = dgl_g.ndata['feat'] * (dgl_g.ndata['is_center'] | dgl_g.ndata['is_first_order']).unsqueeze(1).float()
 
+    # 获取一阶邻居节点的边特征
+    first_order_edge_mask = (dgl_g.ndata['is_center'][src] | dgl_g.ndata['is_center'][dst] |
+                             dgl_g.ndata['is_first_order'][src] | dgl_g.ndata['is_first_order'][dst])
+    dgl_g.edata['1st_order_weight'] = dgl_g.edata['weight'] * first_order_edge_mask.unsqueeze(1).float()
     return dgl_g
 
 # def get_1st_order_neighbors(dgl_graph):

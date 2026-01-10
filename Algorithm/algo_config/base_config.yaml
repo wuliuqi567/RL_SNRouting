@@ -1,5 +1,5 @@
 # base config
-agent: 'MHGNN' # GAT, MHGNN, MPNN, DDQN
+agent: 'MHGNNKGE' # GAT, MHGNN, MPNN, DDQN
 seed: 42
 logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
 project_name: "satNetEnv3"
@@ -19,5 +19,5 @@ train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
 mode_load_dir: "SimResults/GAT/2025-12-24/22-20-31_Starlink_3s_GTs_[4]/"
-outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/MHGNN/2025-12-28/13-02-07_Starlink_3s_GTs_[4]/train/'
+outputPath: '/home/wmq/Desktop/MA-DRL_Routing_Simulator-main/SimResults/MHGNNKGE/2026-01-10/19-19-11_Starlink_3s_GTs_[4]/train/'
 CurrentGTnumber: 4

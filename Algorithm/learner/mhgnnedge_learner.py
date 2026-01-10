@@ -1,0 +1,120 @@
+
+from .base_learner import BaseLearner
+from argparse import Namespace
+from torch.nn import Module
+import torch
+import torch.nn as nn
+from dgl import DGLGraph
+import dgl
+from Algorithm.common.pd_loss_fun import kl_distillation_loss, kl_distillation_loss_v2
+
+
+class MHGNNEDGELearner(BaseLearner):
+    def __init__(self, config: Namespace, policy: Module):
+        super(MHGNNEDGELearner, self).__init__(config, policy)
+        self.optimizer = torch.optim.Adam(self.policy.qNetwork.parameters(), lr=config.learning_rate)
+        self.scheduler = torch.optim.lr_scheduler.LinearLR(self.optimizer, start_factor=1.0, end_factor=0.2, total_iters=config.lr_decay_steps)
+
+        self.student_optimizer = torch.optim.Adam(self.policy.sNetwork.parameters(), lr=config.student_learning_rate)
+        self.student_scheduler = torch.optim.lr_scheduler.LinearLR(self.student_optimizer, start_factor=1.0, end_factor=0.1, total_iters=config.student_lr_decay_steps)
+
+        self.gamma = config.gamma
+        self.temp = config.temperature
+
+        if config.pd_loss == "MSE":
+            self.pd_loss = nn.MSELoss()
+        elif config.pd_loss == "Huber":
+            self.pd_loss = nn.SmoothL1Loss()
+        elif config.pd_loss == "KL":
+            self.pd_loss = kl_distillation_loss
+        elif config.pd_loss == "KL_V2":
+            self.pd_loss = kl_distillation_loss_v2
+        else:
+            raise AttributeError(f"No pd_loss is implemented for {config.pd_loss}.")
+
+
+    def update(self, samples, *args):
+        self.n_step = args[0] if args else print("No n_step provided to learner update.")
+        # 1. 解包数据
+        states, actions, rewards, next_states, dones = zip(*samples)
+
+        # 2. 数据转换与移动到设备
+        batched_states = dgl.batch(list(states)).to(self.device)
+        batched_next_states = dgl.batch(list(next_states)).to(self.device)
+        
+        actions = torch.tensor(actions, dtype=torch.long, device=self.device)
+        rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
+        dones = torch.tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
+
+        # 3. 计算 RL Loss
+        self.policy.qNetwork.train()
+        # self.policy.qNetwork.g = batched_states
+        current_q_values = self.policy.qNetwork(batched_states, batched_states.ndata['feat'], batched_states.edata['weight'])
+        
+        predict_q_values = current_q_values.gather(1, actions.unsqueeze(1) if actions.dim() == 1 else actions)
+
+        # 计算目标 Q 值 (DDQN)
+        with torch.no_grad():
+            # self.policy.qNetwork.g = batched_next_states
+            next_q_values_online = self.policy.qNetwork(batched_next_states, batched_next_states.ndata['feat'], batched_next_states.edata['weight'])
+            
+            # self.policy.qTarget.g = batched_next_states
+            next_q_values_target = self.policy.qTarget(batched_next_states, batched_next_states.ndata['feat'], batched_next_states.edata['weight'])
+            
+            next_action = next_q_values_online.argmax(dim=1, keepdim=True)
+            next_q_values = next_q_values_target.gather(1, next_action)
+            
+            target_q_values = rewards + self.gamma * next_q_values * (1 - dones)
+        
+        rl_loss = self.loss_fn(target_q_values, predict_q_values)
+
+        # 4. 优化 Q 网络
+        self.optimizer.zero_grad()
+        rl_loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy.qNetwork.parameters(), 0.5)  
+        self.optimizer.step()
+        
+        if self.scheduler is not None:
+            self.scheduler.step()
+
+        # 5. 策略蒸馏
+        distill_loss_val = 0.0
+        if self.n_step > getattr(self.config, 'start_distillation_step', 24000):
+            pd_graph = batched_states.local_var()
+            # keep_mask = pd_graph.ndata['is_center'] | pd_graph.ndata['is_first_order']
+            # mask_expanded = keep_mask.unsqueeze(1).float()
+            # pd_graph.ndata['pdfeat'] = pd_graph.ndata['feat'] * mask_expanded
+            # src, dst = pd_graph.edges()
+            # edge_mask = keep_mask[src] & keep_mask[dst] 
+            # edge_mask_expanded = edge_mask.unsqueeze(1).float()
+            # pd_graph.edata['1st_order_weight'] = pd_graph.edata['weight'] * edge_mask_expanded
+
+            
+            self.policy.sNetwork.train()
+            # self.policy.sNetwork.g = pd_graph
+            student_q_values = self.policy.sNetwork(pd_graph, pd_graph.ndata['1st_order_feat'], pd_graph.edata['1st_order_weight'])
+            
+            if self.config.pd_loss in ['KL', 'KL_V2']:
+                distill_loss = self.pd_loss(student_q_values, current_q_values.detach(), temperature=self.temp)
+            else:
+                distill_loss = self.pd_loss(student_q_values, current_q_values.detach())
+            
+            distill_loss_val = distill_loss.item()
+            
+            self.student_optimizer.zero_grad()
+            distill_loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.policy.sNetwork.parameters(), 0.5)
+            self.student_optimizer.step()
+            # if self.student_scheduler is not None:
+            #     self.student_scheduler.step()
+
+
+        # 7. 返回信息
+        info ={
+            "rl_loss": rl_loss.item(),
+            "distill_loss": distill_loss_val,
+            "q_value_mean": target_q_values.mean().item(),
+            "teacher_lr": self.optimizer.param_groups[0]['lr'],
+            "student_lr": self.student_optimizer.param_groups[0]['lr']
+        }
+        return info

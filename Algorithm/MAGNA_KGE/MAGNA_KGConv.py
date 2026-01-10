@@ -7,7 +7,7 @@ from dgl import DGLGraph
 import dgl.function as fn
 import numpy as np
 # from MAGNA.layernormalization import RMSLayerNorm as LayerNorm
-from MAGNA.layernormalization import STDLayerNorm as LayerNorm
+from Algorithm.MAGNA.layernormalization import STDLayerNorm as LayerNorm
 
 class PositionwiseFeedForward(nn.Module):
     "Implements FFN equation."
@@ -37,8 +37,8 @@ class MAGNAKGlayer(nn.Module):
                  input_drop,
                  feat_drop,
                  attn_drop,
-                 topk_type,
-                 top_k=-1,
+                #  topk_type,
+                #  top_k=-1,
                  negative_slope=0.2):
         """
         :param in_ent_feats:
@@ -55,14 +55,14 @@ class MAGNAKGlayer(nn.Module):
         :param negative_slope:
         """
         super(MAGNAKGlayer, self).__init__()
-        self.topk_type = topk_type
+        # self.topk_type = topk_type
         self._in_ent_feats = in_ent_feats
         self._out_feats = out_feats
         self._num_heads = num_heads
         self._in_rel_feats = in_rel_feats
         self.alpha = alpha
         self.hop_num = hop_num
-        self.top_k = top_k
+        # self.top_k = top_k
         self.att_dim = self._out_feats // self._num_heads
 
         self.feat_drop = nn.Dropout(feat_drop)
@@ -121,9 +121,9 @@ class MAGNAKGlayer(nn.Module):
 
         eh = (ent_feat_head * self.attn_h).sum(dim=-1).unsqueeze(-1)
         et = (ent_feat_tail * self.attn_t).sum(dim=-1).unsqueeze(-1)
-        er_relation = (rel_feat * self.attn_r).sum(dim=-1).unsqueeze(-1)
-        e_ids = graph.edata['e_label'].squeeze(dim=-1)
-        er = er_relation[e_ids]
+        er = (rel_feat * self.attn_r).sum(dim=-1).unsqueeze(-1)
+        # e_ids = graph.edata['e_label'].squeeze(dim=-1)
+        # er = er_relation[e_ids]
 
         ent_feat = self.fc_ent(self.input_drop(h)).view(-1, self._num_heads, self.att_dim)
         graph.ndata.update({'ft': ent_feat, 'eh': eh, 'et': et})
@@ -133,21 +133,21 @@ class MAGNAKGlayer(nn.Module):
         graph.apply_edges(edge_attention)
 
         attations = graph.edata.pop('e')
-        if edge_ids is not None:
-            attations[edge_ids] = self.attention_mask_value
-        if drop_edge_ids is not None:
-            attations[drop_edge_ids] = self.attention_mask_value
+        # if edge_ids is not None:
+        #     attations[edge_ids] = self.attention_mask_value
+        # if drop_edge_ids is not None:
+        #     attations[drop_edge_ids] = self.attention_mask_value
 
-        if self.top_k <= 0:
-            graph.edata['a'] = edge_softmax(graph, attations)
-        else:
-            if self.topk_type == 'local':
-                graph.edata['e'] = attations
-                attations = self.topk_attention(graph)
-                graph.edata['a'] = edge_softmax(graph, attations)  ##return attention scores
-            else:
-                graph.edata['e'] = edge_softmax(graph, attations)
-                graph.edata['a'] = self.topk_attention_softmax(graph)
+        # if self.top_k <= 0:
+        graph.edata['a'] = edge_softmax(graph, attations)
+        # else:
+        #     if self.topk_type == 'local':
+        #         graph.edata['e'] = attations
+        #         attations = self.topk_attention(graph)
+        #         graph.edata['a'] = edge_softmax(graph, attations)  ##return attention scores
+        #     else:
+        #         graph.edata['e'] = edge_softmax(graph, attations)
+        #         graph.edata['a'] = self.topk_attention_softmax(graph)
         ent_rst = self.ppr_estimation(graph=graph)
         ent_rst = ent_rst.flatten(1)
 

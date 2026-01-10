@@ -1,0 +1,55 @@
+
+# base config
+agent: 'MHGNNKGE' #
+project_name: "satNetEnv_MHGNNKGE"
+
+# agent hyperparameters
+## model parameters
+
+### GNN parameters
+
+num_layers: 3
+input_ent_dim: 10
+input_edge_dim: 2
+num_hidden: 24
+
+num_heads: 2
+in_drop: 0.25
+attn_drop: 0.2
+edge_drop: 0.2
+alpha: 0.8
+hop_num: 3
+
+# weight_decay: 1e-5
+negative_slope: 0.6
+# self_loop: 1
+# head_tail_shared: 1
+# random_seed: 42
+
+pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
+temperature: 5.0
+
+## replay buffer parameters
+buffer_size: 1000000
+
+batch_size   : 128        # batchSize samples are taken from bufferSize samples to train the network
+
+
+## training parameters
+
+tau         : 0.01       # rate of copying the weights from the Q-Network to the target network
+MAX_EPSILON : 0.99      # Maximum value that the exploration parameter can have
+MIN_EPSILON : 0.001     # Minimum value that the exploration parameter can have
+LAMBDA      : 0.0005   # This value is used to decay the epsilon in the deep learning implementation
+decayRate   : 50    # Decay rate for epsilon decay in deep learning implementation
+
+updateF     : 23      # every updateF updates, the Q-Network will be copied inside the target Network. This is done if hardUpdate is up
+gamma: 0.99
+
+nTrain      : 120         # The teacher network will train every nTrain steps
+train_epoch: 4
+
+learning_rate: 0.002
+lr_decay_steps: 1000000
+student_learning_rate: 0.0005
+student_lr_decay_steps: 1000000
