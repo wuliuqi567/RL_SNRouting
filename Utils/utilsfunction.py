@@ -1156,6 +1156,38 @@ def getDistanceRewardV4(sat, nextSat, satDest, w2, w4):
     # return w2*(SLr/biggestDist)
     # return w2*SLr/1000000
 
+def getDistanceRewardV4b(sat, nextSat, satDest, w4):
+    global biggestDist
+    SLr = getSlantRange(sat, satDest) - getSlantRange(nextSat, satDest)
+    TravelDistance = getSlantRange(sat, nextSat)
+    if TravelDistance > biggestDist:
+        # print(f'Very big distance: {sat.ID}, {nextSat.ID}')
+        pass
+    return (TravelDistance/w4-SLr)/biggestDist
+    # return w2*(SLr/biggestDist)
+    # return w2*SLr/1000000
+
+def getLyapunovReward(sat, next_sat, satDest, w):
+    from Utils.statefunction import getLinkDataRate
+    queueLensDicts = getQueues(sat, DDQN=True)
+    # 计算next_sat在sat的队列中的方向
+
+    if getattr(sat, 'upper', None) == next_sat:
+        direction = 'U'
+    elif getattr(sat, 'lower', None) == next_sat:
+        direction = 'D'
+    elif getattr(sat, 'right', None) == next_sat:
+        direction = 'R'
+    elif getattr(sat, 'left', None) == next_sat:
+        direction = 'L'
+    
+    queueLens = queueLensDicts[direction]
+    ISLDataRate, _ = getLinkDataRate(sat)
+    ISLdata = ISLDataRate[direction]
+    disReward = getDistanceRewardV4b(sat, next_sat, satDest, w)
+    return queueLens*ISLdata/1000000000 * w - disReward
+
+
 
 def getDistanceRewardV5(sat, nextSat, w2):
     SLr = getSlantRange(sat, nextSat)

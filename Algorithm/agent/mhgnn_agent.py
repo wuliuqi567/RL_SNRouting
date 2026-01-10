@@ -118,7 +118,7 @@ class MHGNNAgent(BaseAgent):
             if training_mode and prevSat is not None:
                 new_state_g_dgl = get_subgraph_state(block, sat, g, earth, n_order=self.n_order_adj)
                 self.step += 1
-                reward = self._calculate_reward_v1(block, sat, prevSat, is_terminal=is_reached, is_failure=is_failure)
+                reward = self._calculate_reward_v2(block, sat, prevSat, is_terminal=is_reached, is_failure=is_failure)
                 self.store_experience(block, reward, new_state_g_dgl, True, sat, earth)
                 self.log_infos_no_index({"Reward": sum(block.stepReward) if block.stepReward else reward})
             return -1 if is_failure else 0
@@ -141,7 +141,7 @@ class MHGNNAgent(BaseAgent):
             self.log_infos_no_index({"epsilon": self.epsilon[-1][0] if self.epsilon else 0.0})
             
             if prevSat is not None:
-                reward = self._calculate_reward_v1(block, sat, prevSat)
+                reward = self._calculate_reward_v2(block, sat, prevSat)
                 self.store_experience(block, reward, new_state_g_dgl, False, sat, earth)
 
             if self.step % self.nTrain == 0:
@@ -219,6 +219,19 @@ class MHGNNAgent(BaseAgent):
             again = 0
         return distanceReward + queueReward + again
 
+    def _calculate_reward_v2(self, block, sat, prevSat, is_terminal=False, is_failure=False):
+        w = 5        # rewards the getting to empty queues
+        ArriveRewardC1 = 50
+        PenaltyC2 = -50
+        
+        if is_failure:
+            return PenaltyC2
+        if is_terminal:
+            return ArriveRewardC1
+        
+        satDest = block.destination.linkedSat[1]
+        reward = getLyapunovReward(prevSat, sat, satDest, w)
+        return reward
 
     def alignEpsilon(self, step, sat):
         maxEps = self.config.MAX_EPSILON
