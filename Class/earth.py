@@ -101,7 +101,7 @@ class Earth:
                 constellation.rotate(ndeltas*deltaT)
 
         # Simpy process for handling moving the constellation and the satellites within the constellation
-        # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+        self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
 
     def set_window(self, window):  # function to change/set window for the earth
         """
@@ -327,13 +327,23 @@ class Earth:
             # Handle the result
             if nextHop == -1:
                 # exceed max hops, drop the block
-                # should not happen
                 print('Exceed max hops, dropping block', block.ID, 'at satellite', sat.ID)
+                # Remove block from buffer and add to dropBlocks
+                buffer[1].pop(index)
+                buffer[0].pop(index)
+                dropBlocks.append(block)
+                # Don't increment index since we removed an element
+                continue
 
             elif nextHop == -2:
                 # no available action, drop the block
-                # should not happen
                 print("No available action, dropping block", block.ID, "at satellite", sat.ID)
+                # Remove block from buffer and add to dropBlocks
+                buffer[1].pop(index)
+                buffer[0].pop(index)
+                dropBlocks.append(block)
+                # Don't increment index since we removed an element
+                continue
 
             elif nextHop == 0:
                 # arrive at destination
@@ -375,38 +385,36 @@ class Earth:
 
     def updateSatelliteProcessesRL(self, graph):
         """
-        Update: This function works now. The issue is that all the inter-plane packets that were in a queue to be sent are discarded
-        when the graph is updated and those links stop existing.
-        This function does not work correctly! The remaking of processes and queues fails when the satellites move
-        enough so that new links must be formed.
-
+        Function which ensures all processes on all satellites are updated after constellation movement.
+        
         This function takes into account that the paths are not complete and the next step may not have been chosen yet.
 
-        Function which ensures all processes on all satellites are updated after constellation movement. This is done in
-        several steps:
-            - All blocks waiting to be sent or currently being sent has their paths updated.
-            - ISLs are updated with references to new inter-orbit satellites (intra-orbit links do not change).
-                - This includes updating buffer if ISL is changed
-                - It also includes remaking send-process if ISL is changed
-                - Despite intra-orbit links not changing, blocks in an intra-orbit buffer may have to be moved.
-            - GSL is updated:
-                - Depending on new status - whether the satellite has a GSL or not - and past status - whether the
-                satellite had a GSL or not - GSL buffer and process is handled accordingly.
-            - All blocks not currently being transmitted to a satellite/GT, which is still present as a ISL or GSL, are
-            redistributed to send-buffers according to their arrival time at the satellite.
+        Steps:
+            1. Update ISL neighbors for all satellites (both intra-plane and inter-plane).
+            2. For all buffers, use RL agent to recalculate next hops for blocks.
+            3. Handle inter-plane ISLs:
+                - If link still exists: keep first block in buffer, redistribute others
+                - If link broken: redistribute all blocks, stop process
+            4. Handle intra-plane ISLs:
+                - Similar to inter-plane, but links should not change
+            5. Handle GSL:
+                - If satellite has linked GT: restart send process
+                - If GSL link lost: mark blocks in buffer as lost (added to dropBlocks)
+            6. Redistribute blocks to correct buffers based on their updated paths.
 
         This function differentiates from the simple version by allowing continued operation of send-processes after
         constellation movement if the link is not broken.
+        
+        Note: When GSL link is lost, blocks in GT buffer are marked as lost (conservative approach).
         """
         # update linked sats
         sats = []
         for plane in self.LEO:
             for sat in plane.sats:
                 sats.append(sat)
-                if self.agent is not None:
-                    # update ISL. Intra-plane should not change
-                    sat.findIntraNeighbours(self)
-                    sat.findInterNeighbours(self)
+                # update ISL. Intra-plane should not change
+                sat.findIntraNeighbours(self)
+                sat.findInterNeighbours(self)
 
         print('Remaking paths for all blocks in constellation...')
         for plane in self.LEO:
@@ -550,10 +558,11 @@ class Earth:
                                 blocksToDistribute.append((block.checkPoints[-1], block))
 
                             # remove all but the first block and event from the buffer
-                            length = len(sat.sendBufferSatsIntra[bufferIndex][1]) - 1
-                            for _ in range(length):
-                                sat.sendBufferSatsIntra[bufferIndex][1].pop(1)
-                                sat.sendBufferSatsIntra[bufferIndex][0].pop(1)
+                            # Keep only the first element, safely handle length mismatch
+                            if len(sat.sendBufferSatsIntra[bufferIndex][1]) > 1:
+                                sat.sendBufferSatsIntra[bufferIndex][1][:] = [sat.sendBufferSatsIntra[bufferIndex][1][0]]
+                            if len(sat.sendBufferSatsIntra[bufferIndex][0]) > 1:
+                                sat.sendBufferSatsIntra[bufferIndex][0][:] = [sat.sendBufferSatsIntra[bufferIndex][0][0]]
 
                         else:
                             # add all blocks to redistribution list
@@ -588,22 +597,15 @@ class Earth:
                         sat.sendBlocksGT[0].interrupt()
                         sat.sendBlocksGT = []
                     
-                    # User assumption: Blocks in buffer had a link before movement and should be considered sent.
-                    # Flush buffer to receivedDataBlocks
+                    # GSL link lost - blocks in buffer cannot be sent directly
+                    # Option 1: Mark as lost (conservative approach)
+                    # Option 2: Redistribute to other paths (if possible)
                     if sat.sendBufferGT[1]:
-                        # print(f"Flushing {len(sat.sendBufferGT[1])} blocks from Sat {sat.ID} to Ground (Link Lost)")
                         for block in sat.sendBufferGT[1]:
-                            print(f'---------Block {block.ID} from Sat {sat.ID} assumed delivered to Ground (Link Lost)')
-                            # Assume delivered
-                            # Calculate propagation delay
-                            dx = sat.x - block.destination.x
-                            dy = sat.y - block.destination.y
-                            dz = sat.z - block.destination.z
-                            dist = math.sqrt(dx*dx + dy*dy + dz*dz)
-                            propTime = dist / Vc
-                            
-                            block.checkPoints.append(sat.env.now + propTime)
-                            receivedDataBlocks.append(block)
+                            print(f'---------Block {block.ID} from Sat {sat.ID} lost due to GSL link lost')
+                            # Add to lost blocks instead of assuming delivered
+                            dropBlocks.append(block)
+                            self.lostBlocks += 1
                         
                         # Clear buffer
                         sat.sendBufferGT = ([sat.env.event()], [])
@@ -634,6 +636,8 @@ class Earth:
                     if index is None:
                         print(f'Satellite {sat.ID} not found in the QPath: {block[1].QPath}') # FIXME This should not happen. Debugging I realized when this happens the previous satellite is twice in last positions of QPath, instead of prevSat and currentSat. The current sat was the linked to the gateways bu after the movement it is not anymore.
                         self.lostBlocks += 1
+                        # Add block to dropBlocks for proper tracking
+                        dropBlocks.append(block[1])
                     elif index == len(block[1].QPath) - 2:
                         # add block to GT send-buffer
                         if not sat.sendBufferGT[0][0].triggered:

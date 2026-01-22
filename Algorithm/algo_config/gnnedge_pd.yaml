@@ -11,13 +11,13 @@ project_name: "satNetEnv_MHGNNKGE"
 num_layers: 3
 input_ent_dim: 10
 input_edge_dim: 2
-num_hidden: 24
+num_hidden: 16
 
 num_heads: 2
 in_drop: 0.25
 attn_drop: 0.2
-edge_drop: 0.2
-alpha: 0.8
+edge_drop: 0.1
+alpha: 0.2
 hop_num: 3
 
 # weight_decay: 1e-5
