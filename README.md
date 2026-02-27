@@ -71,3 +71,7 @@ The population maps used in the simulators are found at https://sedac.ciesin.col
 There is a guide to get the data from the population maps at https://towardsdatascience.com/visualising-global-population-datasets-with-python-c87bcfc8c6a6
 
 
+最直接：增大 avUserLoad（system_configure.py:45），提高用户侧需求流量。
+若开启 balancedFlow=True（system_configure.py:43-44），则改 totalFlow 才生效；此时 avUserLoad 不主导。
+若当前已被 capacity × Fraction 限制，增大 Fraction（system_configure.py:11）可以抬高上限。
+若仍受链路能力限制，需提高链路能力参数（如带宽 B、功率等，见 system_configure.py:31-40），否则只会增加排队/丢包，不会提高可达吞吐。

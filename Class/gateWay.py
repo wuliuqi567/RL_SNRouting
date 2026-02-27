@@ -514,9 +514,10 @@ class Gateway:
         setting the fractions of the data generation to each destination gateway.
         """
 
-        # split the traffic evenly among the active gateways while keeping the fraction to each gateway the same
-        # regardless of number of active gateways
-        flow = self.totalAvgFlow / (len(self.totalLocations) - 1)
+        # split the traffic evenly among active destination gateways
+        # self.totalGTs includes self, so number of active destinations is (self.totalGTs - 1)
+        active_destinations = max(1, int(self.totalGTs) - 1)
+        flow = self.totalAvgFlow / active_destinations
 
         # compute average time (seconds) to fill block for this destination
         avgTime = block.size / flow  # the average time to fill the buffer in seconds

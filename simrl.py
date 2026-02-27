@@ -357,21 +357,35 @@ if __name__ == '__main__':
     with open(config_file, "r") as f:
         config_data = yaml_ruamel.load(f)
     
+    use_rl_model = config_data.get('use_rl_model', True)
     agent_name = config_data['agent']
-    if agent_name in REGISTRY_Agents:
-        agent_class = REGISTRY_Agents[agent_name]
+    run_mode_name = agent_name
+
+    if use_rl_model:
+        if agent_name in REGISTRY_Agents:
+            agent_class = REGISTRY_Agents[agent_name]
+        else:
+            raise ValueError(f"Unknown RL agent '{agent_name}'. Available: {list(REGISTRY_Agents.keys())}")
+    else:
+        agent_class = None
+        run_mode_name = "ShortestPath"
+        print("[INFO] Running in shortest-path mode. RL model is disabled.")
     
     
     current_dir = os.getcwd()
-    if config_data["train_TA_model"]:
-        
+    if not use_rl_model:
+        filetime_ymd = datetime.now().strftime("%Y-%m-%d")
+        filetime_hms = datetime.now().strftime("%H-%M-%S")
+        outputPath = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/'
+        os.makedirs(outputPath, exist_ok=True)
+    elif config_data["train_TA_model"]:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
         filetime_hms = datetime.now().strftime("%H-%M-%S")
         # data_inputrl = pd.read_csv("inputRL.csv")
         # constellation = data_inputrl['Constellation'][0]
         # sim_time = data_inputrl['Test length'][0]
-        outputPath      = current_dir + f'/SimResults/{agent_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/train/'
-        os.makedirs(outputPath, exist_ok=True) 
+        outputPath      = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/train/'
+        os.makedirs(outputPath, exist_ok=True)
     else:
         mode_load_dir = config_data.get('mode_load_dir', None)
         if config_data['use_student_network']:

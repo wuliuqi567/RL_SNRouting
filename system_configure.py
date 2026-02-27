@@ -42,7 +42,7 @@ min_rate= 10e3  # Minimum rate in kbps
 # Uplink Parameters
 balancedFlow= False         # if set to true all the generated traffic at each GT is equal
 totalFlow   = 2*1000000000  # Total average flow per GT when the balanced traffc option is enabled. Malaga has 3*, LA has 3*, Nuuk/500
-avUserLoad  = 20593 * 8      # average traffic usage per second in bits
+avUserLoad  = 3 * 8      # average traffic usage per second in bits/ 2轻负载，8重负载, 20593*8 is the total gs traffic in bits/s, so 20593*8/3 is the average traffic per user in bits/s when balancedFlow is False
 flowGenType = "Step"       # 函数支持两种计算用户流量贡献的方式, "Step"只要用户在覆盖范围内（cellsInRange），无论距离 GT 多远，每个用户产生的流量都是一样的 "Slope"用户产生的流量随距离线性衰减。
 # Block
 BLOCK_SIZE   = 64800

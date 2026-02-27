@@ -33,7 +33,7 @@ class Earth:
         self.env = env
         self.loss   = []
         self.lossAv = []
-        self.agent = agent_class()
+        self.agent = agent_class() if agent_class is not None else None
         self.step   = 0
         self.nMovs  = 0     # number of total movements done by the constellation
         self.epsilon= []    # set of epsilon values
