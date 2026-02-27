@@ -214,6 +214,7 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
 
         # run the simulation
         env.process(simProgress(simulationTimelimit, env))
+        env.process(earth1.monitor_max_queue(interval=5))  # 每5ms统计一次
         startTime = time.time()
         try:
             env.run(simulationTimelimit)
@@ -263,6 +264,24 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
             print('plot queun length')
             plotQueues(earth1.queues, outputPath, GTnumber)
             
+        # 保存最大队列统计
+        if earth1.max_queue_stats:
+            df_max_queue = pd.DataFrame(
+                earth1.max_queue_stats, 
+                columns=['Time_ms', 'Max_Queue_Length', 'Node_ID']
+            )
+            df_max_queue.to_csv(outputPath + '/csv/' + f"Max_Queue_Stats_{GTnumber}_GTs.csv", index=False)
+            
+            # 绘制最大队列长度随时间变化
+            plt.figure(figsize=(12, 6))
+            plt.plot(df_max_queue['Time_ms'], df_max_queue['Max_Queue_Length'])
+            plt.xlabel('Simulation Time (ms)')
+            plt.ylabel('Maximum Queue Length')
+            plt.title(f'Maximum Queue Length Over Time ({GTnumber} GTs)')
+            plt.grid(True)
+            plt.savefig(outputPath + '/pngQueues/' + f'Max_Queue_Over_Time_{GTnumber}_GTs.png', dpi=300)
+            plt.close()
+
 
         # print('Plotting link congestion figures...')
         # plotCongestionMap(earth1, np.asarray(blocks), outputPath + '/Congestion_Test/', GTnumber, plot_separately=plotAllCon)

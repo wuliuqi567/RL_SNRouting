@@ -29,6 +29,8 @@ class Earth:
         # self.plotPaths = plotPath
         self.lostBlocks = 0
         self.queues = []
+        self.max_queue_stats = []  # 新增：存储 (时间, 最大队列长度, 节点ID)
+        self.env = env
         self.loss   = []
         self.lossAv = []
         self.agent = agent_class()
@@ -101,7 +103,51 @@ class Earth:
                 constellation.rotate(ndeltas*deltaT)
 
         # Simpy process for handling moving the constellation and the satellites within the constellation
-        self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+        # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+    
+    def get_max_queue_length(self):
+        """获取当前系统中所有节点的最大队列长度"""
+        max_length = 0
+        max_node_id = None
+        
+        # 遍历所有卫星的发送缓冲区
+        for plane in self.LEO:
+            for sat in plane.sats:
+                # 检查卫星到GT的缓冲区
+                if hasattr(sat, 'sendBufferGT') and len(sat.sendBufferGT) > 1:
+                    queue_len = len(sat.sendBufferGT[1])
+                    if queue_len > max_length:
+                        max_length = queue_len
+                        max_node_id = sat.ID
+                
+                # 检查卫星间链路的缓冲区（intra-plane）
+                if hasattr(sat, 'sendBufferSatsIntra'):
+                    for buffer in sat.sendBufferSatsIntra:
+                        queue_len = len(buffer[1])
+                        if queue_len > max_length:
+                            max_length = queue_len
+                            max_node_id = sat.ID
+                
+                # 检查卫星间链路的缓冲区（inter-plane）
+                if hasattr(sat, 'sendBufferSatsInter'):
+                    for buffer in sat.sendBufferSatsInter:
+                        queue_len = len(buffer[1])
+                        if queue_len > max_length:
+                            max_length = queue_len
+                            max_node_id = sat.ID
+        
+        return max_length, max_node_id
+
+    def monitor_max_queue(self, interval=50):
+        """定期监控最大队列长度的 SimPy 进程
+        
+        Args:
+            interval: 统计间隔（毫秒）
+        """
+        while True:
+            max_length, node_id = self.get_max_queue_length()
+            self.max_queue_stats.append((self.env.now, max_length, node_id))
+            yield self.env.timeout(interval)
 
     def set_window(self, window):  # function to change/set window for the earth
         """
