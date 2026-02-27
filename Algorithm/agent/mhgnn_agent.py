@@ -255,24 +255,48 @@ class MHGNNAgent(BaseAgent):
         torch.save(self.policy.sNetwork.state_dict(), sNet_model_path)
 
     def load_model(self):
-        # load neural networks
+        # 加载神经网络权重文件。
+        # 这里的最终目标是得到 3 个完整文件路径：
+        # 1) qNet_mhgnn_model.pth
+        # 2) qTarget_mhgnn_model.pth
+        # 3) sNet_mhgnn_model.pth
         model_name = 'mhgnn_model.pth'
         
-        # Fix for loading model from train directory when testing
+        # Step 1: 先取配置里保存的模型目录（通常来自 BaseAgent / 配置文件）。
+        # self.model_dir_save 可能是绝对路径，也可能是相对路径；
+        # 也可能在测试阶段包含 test_teacher_network / test_student_network 标记。
         model_dir = self.model_dir_save
+
+        # Step 2: 如果当前是测试目录命名（例如 .../test_teacher_network1/...），
+        # 则把该片段替换成 train，确保测试时读取的是训练阶段保存的权重目录。
+        # 正则 test_teacher_network[^/\\]* 表示：
+        # - 固定前缀 test_teacher_network
+        # - 后面可跟 0 个或多个“非路径分隔符”字符（可包含数字或字符串）
+        #   例如：test_teacher_network、test_teacher_network1、test_teacher_network_v2、...
         if 'test_teacher_network' in model_dir:
-            model_dir = re.sub(r'test_teacher_network\d*', 'train', model_dir)
+            model_dir = re.sub(r'test_teacher_network[^/\\]*', 'train', model_dir)
         elif 'test_student_network' in model_dir:
-            model_dir = re.sub(r'test_student_network\d*', 'train', model_dir)
+            model_dir = re.sub(r'test_student_network[^/\\]*', 'train', model_dir)
         
+        # Step 3: 处理相对路径。
+        # 若 model_dir 不是绝对路径（例如 "MHGNN/2026-01-01"），
+        # 则基于 self.outputPath 的 ../train/ 进行拼接，得到可访问的完整目录。
+        # 也就是：最终目录 = os.path.join(self.outputPath, '../train/', model_dir)
+        # 注意：这里保持原有实现逻辑，不改变目录组织规则。
         if not os.path.isabs(model_dir):
              model_dir = os.path.join(self.outputPath, '../train/', model_dir)
 
+        # Step 4: 在上面得到的 model_dir 下拼接具体文件名。
+        # 最终得到 3 个权重文件的完整路径。
         qNet_model_path = os.path.join(model_dir, 'qNet_' + model_name)
         qTarget_model_path = os.path.join(model_dir, 'qTarget_' + model_name)
         sNet_model_path = os.path.join(model_dir, 'sNet_' + model_name)
 
+        # 打印 qNet 路径用于调试（可快速确认当前到底从哪个目录加载）。
         print("Loading model from:", qNet_model_path)
+
+        # Step 5: 按设备加载参数（CPU/GPU 由 self.device 决定）。
+        # weights_only=True 表示只读取权重张量，不反序列化额外对象。
         self.policy.qNetwork.load_state_dict(torch.load(qNet_model_path, map_location=self.device, weights_only=True))
         self.policy.qTarget.load_state_dict(torch.load(qTarget_model_path, map_location=self.device, weights_only=True))
         self.policy.sNetwork.load_state_dict(torch.load(sNet_model_path, map_location=self.device, weights_only=True))

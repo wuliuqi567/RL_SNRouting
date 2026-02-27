@@ -155,6 +155,12 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
                 GT.getTotalFlow(1, flowGenType, 1, GT.dataRate, Fraction)  # using data rate of the GSL uplink
             else:
                 GT.getTotalFlow(1, flowGenType, 1, GT.linkedSat[1].downRate, Fraction)  # using data rate of the GSL downlink
+
+    total_network_injected_flow = sum(
+        gt.totalAvgFlow for gt in earth.gateways
+        if getattr(gt, 'totalAvgFlow', None) is not None
+    )
+    print('Total network injected flow: ' + str(total_network_injected_flow / 1000000000) + ' Gbps')
     print('----------------------------------')
 
 
@@ -376,7 +382,7 @@ if __name__ == '__main__':
     if not use_rl_model:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
         filetime_hms = datetime.now().strftime("%H-%M-%S")
-        outputPath = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/'
+        outputPath = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}' + f'_avUserLoad{avUserLoad}/'
         os.makedirs(outputPath, exist_ok=True)
     elif config_data["train_TA_model"]:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
@@ -389,9 +395,9 @@ if __name__ == '__main__':
     else:
         mode_load_dir = config_data.get('mode_load_dir', None)
         if config_data['use_student_network']:
-            outputPath = os.path.join(current_dir, mode_load_dir + 'test_student_network/')
+            outputPath = os.path.join(current_dir, mode_load_dir + f'test_student_network_avUserLoad{avUserLoad}/')
         else:
-            outputPath = os.path.join(current_dir, mode_load_dir + 'test_teacher_network/')
+            outputPath = os.path.join(current_dir, mode_load_dir + f'test_teacher_network_avUserLoad{avUserLoad}/')
         if not os.path.exists(outputPath):
             os.makedirs(outputPath)
     sys.stdout = Logger(outputPath + 'logfile.log')

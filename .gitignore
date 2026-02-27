@@ -30,6 +30,7 @@ playground.ipynb
 /pre_trained_NNs
 /MAGNA-models
 /SimResults
+/SimBestModel
 .vscode
 .python-version
 __pychache__
