@@ -1,7 +1,7 @@
 
 # base config
 agent: 'MHGNN' #
-project_name: "satNetEnv_MHGNN"
+project_name: "satNetEnv_MHGNN_model_temperaturev1"
 
 # agent hyperparameters
 ## model parameters
@@ -28,8 +28,8 @@ head_tail_shared: 1
 # random_seed: 42
 
 pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
-temperature: 5.0
-
+temperature: 8
+# start_distillation_step: 0
 ## replay buffer parameters
 buffer_size: 1000000
 
@@ -50,7 +50,12 @@ gamma: 0.99
 nTrain      : 120         # The teacher network will train every nTrain steps
 train_epoch: 4
 
-learning_rate: 0.002
+learning_rate: 0.0001
 lr_decay_steps: 1000000
 student_learning_rate: 0.0005
 student_lr_decay_steps: 1000000
+student_model: "magna" # options: "magna" or "mlp"
+# student_hidden_dims: [64, 64, 32]
+student_hidden_dims: [64, 32]
+
+student_dropout: 0.0

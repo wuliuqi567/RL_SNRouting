@@ -408,6 +408,6 @@ if __name__ == '__main__':
     with open(config_file, "w") as f:
         yaml_ruamel.dump(config_data, f)
             
-
+    save_system_config_to_json(os.path.join(outputPath, "system_config_dump.json"))
     RunSimulation(GTs, outputPath, agent_class, radioKM=rKM)
     # cProfile.run("RunSimulation(GTs, './', outputPath, populationMap, radioKM=rKM)")

@@ -14,7 +14,7 @@ action_size: 4
 
 #gat learner parameters
 gamma: 0.99
-learning_rate: 0.002
+learning_rate: 0.001
 lr_decay_steps: 10000
 train_epoch: 4
 # pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"

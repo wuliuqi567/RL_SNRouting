@@ -17,7 +17,7 @@ action_size: 4
 
 #gat learner parameters
 gamma: 0.99
-learning_rate: 0.002
+learning_rate: 0.0005
 lr_decay_steps: 100000
 student_learning_rate: 0.0005
 student_lr_decay_steps: 50000

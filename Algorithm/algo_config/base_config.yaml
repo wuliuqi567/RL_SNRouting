@@ -1,5 +1,5 @@
 # base config
-agent: 'MPNN' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
+agent: 'MHGNN' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
 use_rl_model: true # false: shortest-path only (no RL model)
 seed: 42
 logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
@@ -16,9 +16,9 @@ action_size: 4 # number of possible actions
 input_dim: 10 # dimension of input each node features
 
 # training parameters
-train_TA_model: false # whether to train the teacher agent network
+train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
-mode_load_dir: "SimBestModel/MPNN/2025-12-24/22-20-13_Starlink_3s_GTs_[4]/"
-outputPath: '/home/qwer/Desktop/RL_SNRouting/SimBestModel/MPNN/2025-12-24/22-20-13_Starlink_3s_GTs_[4]/test_teacher_network_avUserLoad24/'
-CurrentGTnumber: 4
+mode_load_dir: "SimResults/MHGNN/2026-03-02/23-57-40_Starlink_3s_GTs_[2]/"
+outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/MHGNN/2026-03-03/21-00-34_Starlink_3s_GTs_[2]/train/'
+CurrentGTnumber: 2

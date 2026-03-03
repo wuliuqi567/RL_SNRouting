@@ -61,15 +61,28 @@ def _pick_reward_column(df: pd.DataFrame) -> str:
 	raise ValueError("No valid numeric reward column was found in csv file.")
 
 
-def _load_reward_series(csv_path: PathLike) -> np.ndarray:
+def _pick_time_column(df: pd.DataFrame) -> Optional[str]:
 	"""
-	从CSV文件中加载奖励数据序列
+	从DataFrame中自动选择时间列
+
+	优先查找常见的时间列名（如"Time"、"time"等），
+	如果未找到则返回None。
+	"""
+	for column in ["Time", "time", "timestamp", "Timestamp"]:
+		if column in df.columns:
+			return column
+	return None
+
+
+def _load_time_reward_series(csv_path: PathLike) -> Tuple[np.ndarray, np.ndarray]:
+	"""
+	从CSV文件中加载时间与奖励数据序列（按有效奖励对齐）
 
 	参数:
 		csv_path: CSV文件路径
 
 	返回:
-		np.ndarray: 奖励数据的numpy数组
+		Tuple[np.ndarray, np.ndarray]: (时间序列, 奖励序列)
 
 	异常:
 		ValueError: 如果奖励数据为空
@@ -78,13 +91,31 @@ def _load_reward_series(csv_path: PathLike) -> np.ndarray:
 	df = pd.read_csv(csv_path)
 	# 自动选择奖励列
 	reward_col = _pick_reward_column(df)
-	# 转换为数值类型，无效值转为NaN，然后删除NaN值
-	reward = pd.to_numeric(df[reward_col], errors="coerce").dropna().to_numpy()
+	time_col = _pick_time_column(df)
+
+	# 转换为数值类型
+	reward_num = pd.to_numeric(df[reward_col], errors="coerce")
+
+	# 以reward有效性为基准对齐时间与奖励
+	valid_mask = reward_num.notna()
+	reward = reward_num[valid_mask].to_numpy()
 
 	if reward.size == 0:
 		raise ValueError(f"Reward data is empty in: {csv_path}")
 
-	return reward
+	if time_col is not None:
+		time_num = pd.to_numeric(df[time_col], errors="coerce")
+		time_num = time_num[valid_mask]
+		# 如果时间列存在但全部无效，则回退为索引
+		if time_num.notna().any():
+			time_values = time_num.fillna(method="ffill").fillna(method="bfill").to_numpy()
+		else:
+			time_values = np.arange(1, reward.size + 1)
+	else:
+		# 未找到时间列时回退为索引（兼容旧CSV）
+		time_values = np.arange(1, reward.size + 1)
+
+	return time_values, reward
 
 
 def _smooth_series(values: np.ndarray, window: int = 500, method: str = "ema") -> np.ndarray:
@@ -184,7 +215,7 @@ def plot_reward_convergence(
 	csv_files: Mapping[str, PathLike],
 	save_path: Optional[PathLike] = None,
 	title: str = "Reward Convergence",
-	smooth_window: int = 500,
+	smooth_window: int = 250,
 	smooth_method: str = "ema",
 	max_points: Optional[int] = 12000,
 	show_raw: bool = True,
@@ -223,8 +254,8 @@ def plot_reward_convergence(
 	# 遍历每个算法的CSV文件
 	for idx, (label, csv_path) in enumerate(csv_files.items()):
 		try:
-			# 加载奖励数据
-			reward = _load_reward_series(csv_path)
+			# 加载时间与奖励数据
+			x, reward = _load_time_reward_series(csv_path)
 		except ValueError as e:
 			# 如果数据为空，打印警告并跳过
 			print(f"[WARN] Skipping {label}: {e}")
@@ -233,12 +264,11 @@ def plot_reward_convergence(
 		# 如果数据点过多，进行降采样以提高绘图性能
 		if max_points is not None and reward.size > max_points:
 			step = int(np.ceil(reward.size / max_points))
+			x = x[::step]
 			reward = reward[::step]
 
 		# 对数据进行平滑处理
 		smooth_reward = _smooth_series(reward, window=smooth_window, method=smooth_method)
-		# 生成x轴坐标（episode编号，从1开始）
-		x = np.arange(1, len(reward) + 1)
 		# 为每个算法分配颜色（循环使用配色方案）
 		color = colors[idx % len(colors)]
 
@@ -352,7 +382,7 @@ if __name__ == "__main__":
 	# 候选的结果目录列表
 	candidate_roots = [
 		# repo_root / "SimResults",  # 可选：通用结果目录
-		repo_root / "best_simresult" / "4GTs",  # 4个网关的最佳结果
+		repo_root / "SimBestModel" / "4GTs",  # 4个网关的最佳结果
 	]
 
 	# 查找第一个存在的目录

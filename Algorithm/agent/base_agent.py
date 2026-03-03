@@ -7,7 +7,8 @@ from ..common.common_tools import get_time_string, create_directory
 from ..common.experienceReplay import ExperienceReplay
 from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
-import swanlab as wandb
+# import swanlab as wandb
+import wandb
 import socket
 from argparse import Namespace
 import yaml
