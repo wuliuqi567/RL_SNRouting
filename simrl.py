@@ -1,16 +1,14 @@
 # SimulationRL.py
 import os
 import random
+import logging
 import simpy
 import pandas as pd
 import networkx as nx
 from datetime import datetime
 import time
 import traceback
-
-import sys
 # from Algorithm.agent.mhgnn_agent import MHGNNAgent
-from Utils.logger import Logger
 from Utils.utilsfunction import *
 from system_configure import *
 import system_configure
@@ -22,6 +20,25 @@ from Class.auxiliaryClass import *
 
 from Algorithm.agent import REGISTRY_Agents
 
+
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(output_path=None):
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    handlers = [logging.StreamHandler()]
+
+    if output_path is not None:
+        log_file = os.path.join(output_path, 'logfile_logging.log')
+        handlers.append(logging.FileHandler(log_file, mode='a', encoding='utf-8'))
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers.clear()
+    for handler in handlers:
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
+
 def simProgress(simTimelimit, env):
     timeSteps = 100
     timeStepSize = simTimelimit/timeSteps
@@ -31,7 +48,7 @@ def simProgress(simTimelimit, env):
     while True:
         elapsedTime = time.time() - startTime
         estimatedTimeRemaining = elapsedTime * (timeSteps/progress) - elapsedTime
-        print("Simulation progress: {}% Estimated time remaining: {} seconds Current simulation time: {}".format(progress, int(estimatedTimeRemaining), env.now), end='\r')
+        logger.info("Simulation progress: %s%% Estimated time remaining: %s seconds Current simulation time: %s", progress, int(estimatedTimeRemaining), env.now)
         yield env.timeout(timeStepSize)
         progress += 1
 
@@ -53,7 +70,7 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
     # fraction = inputParams['Fraction'][0]
     # testType = inputParams['Test type'][0]
 
-    print(f'Fraction of traffic generated: {Fraction}, test type: {Test_type}')
+    logger.info('Fraction of traffic generated: %s, test type: %s', Fraction, Test_type)
     # pathing  = inputParams['Pathing'][0]
 
     if Test_type == "Rates":
@@ -70,8 +87,8 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
     #     for plane in earth.LEO:
     #         for sat in plane.sats:
     #             sat.agent = MHGNNAgent(config)
-    print(earth)
-    print()
+    logger.info('%s', earth)
+    logger.info('')
 
     earth.linkCells2GTs(distance)
     earth.linkSats2GTs("Optimize")
@@ -115,7 +132,7 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
                 # fiveNeighbors[0][0] += 1
                 # fiveNeighbors[1].append(neighbors)
             if len(neighbors) != 4 and sat.linkedGT is None:
-                print(sat, f'{len(neighbors)} neighbors found')
+                logger.info('%s %s neighbors found', sat, len(neighbors))
 
             itt = 0
             for sat2 in sats:
@@ -142,8 +159,8 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
     bottleneck2, minimum2 = findBottleneck(paths[1], earth, False)
     bottleneck1, _ = findBottleneck(paths[0], earth, False, minimum2)
 
-    print('Traffic generated per GT (totalAvgFlow per Milliard):')
-    print('----------------------------------')
+    logger.info('Traffic generated per GT (totalAvgFlow per Milliard):')
+    logger.info('----------------------------------')
     for GT in earth.gateways:
         mins = []
         if GT.linkedSat[0] is not None:
@@ -160,8 +177,8 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
         gt.totalAvgFlow for gt in earth.gateways
         if getattr(gt, 'totalAvgFlow', None) is not None
     )
-    print('Total network injected flow: ' + str(total_network_injected_flow / 1000000000) + ' Gbps')
-    print('----------------------------------')
+    logger.info('Total network injected flow: %s Gbps', total_network_injected_flow / 1000000000)
+    logger.info('----------------------------------')
 
 
 
@@ -204,12 +221,12 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         selectedGateWayLocations = {'Location': allGateWayInfo['Location'][:GTnumber]} # only use the first GTnumber locations
         selectedGateWayLocations.update({'Latitude': allGateWayInfo['Latitude'][:GTnumber]})
         selectedGateWayLocations.update({'Longitude': allGateWayInfo['Longitude'][:GTnumber]})
-        print('----------------------------------')
-        print('Time:')
-        print(datetime.now().strftime("%H:%M:%S"))
-        print('Locations:')
-        print(selectedGateWayLocations['Location'])
-        print(f'Movement Time: {movementTime}')
+        logger.info('----------------------------------')
+        logger.info('Time:')
+        logger.info('%s', datetime.now().strftime("%H:%M:%S"))
+        logger.info('Locations:')
+        logger.info('%s', selectedGateWayLocations['Location'])
+        logger.info('Movement Time: %s', movementTime)
 
 
         # earth1, _, _, _ = initialize(env, agent_class, populationDataDir, './Gateways.csv', radioKM, inputParams, movementTime, locations, outputPath, matching=matching)
@@ -227,9 +244,9 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         except Exception as e:
             # SimPy re-raises a *new* exception instance and stores the original (with traceback)
             # in e.__cause__. Print it so we can see the real origin of errors like KeyError('block').
-            print("\n[ERROR] Simulation crashed inside SimPy.")
+            logger.error('Simulation crashed inside SimPy.')
             if getattr(e, "__cause__", None) is not None:
-                print("[ERROR] Original exception (SimPy __cause__):")
+                logger.error('Original exception (SimPy __cause__):')
                 traceback.print_exception(e.__cause__)
             else:
                 traceback.print_exception(e)
@@ -247,27 +264,27 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         #             np.save(f, qTable)
 
         # plotting and saving results
-        print('Simulation time: {} seconds'.format(round(timeToSim, 2)))
-        print('----------------------------------')
+        logger.info('Simulation time: %s seconds', round(timeToSim, 2))
+        logger.info('----------------------------------')
         if Test_type == "Rates":
             plotRatesFigures()
         else:
             # save the congestion_test in getBlockTransmissionStats() function
             results, allLatencies, pathBlocks, blocks = getBlockTransmissionStats(timeToSim, selectedGateWayLocations['Location'], Constellation, earth1, outputPath)
-            print(f'DataBlocks lost: {earth1.lostBlocks}')
+            logger.info('DataBlocks lost: %s', earth1.lostBlocks)
         
             plotSavePathLatencies(outputPath, GTnumber, pathBlocks)
 
-            print('Plotting Throughput...')
+            logger.info('Plotting Throughput...')
             plot_packet_latencies_and_uplink_downlink_throughput(blocks, outputPath, bins_num=30, save = True, plot_separately = plotAllThro)
             # plot_throughput_cdf(blocks, outputPath, bins_num = 100, save = True, plot_separately = plotAllThro)
             
-            print('Plotting rewards...')
+            logger.info('Plotting rewards...')
             save_plot_rewards(outputPath, earth1.rewards, GTnumber)
             # save & plot all paths latencies
-            print('Plotting latencies...')
+            logger.info('Plotting latencies...')
             plotSaveAllLatencies(outputPath, GTnumber, allLatencies)
-            print('plot queun length')
+            logger.info('plot queun length')
             plotQueues(earth1.queues, outputPath, GTnumber)
             
         # 保存最大队列统计
@@ -310,25 +327,25 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         gc.collect()
 
         if len(GTs)>1:
-            print('----------------------------------')
-            print('Time:')
+            logger.info('----------------------------------')
+            logger.info('Time:')
             end_time_GT = datetime.now()
-            print(end_time_GT.strftime("%H:%M:%S"))
-            print('----------------------------------')
+            logger.info('%s', end_time_GT.strftime("%H:%M:%S"))
+            logger.info('----------------------------------')
             elapsed_time_GT = end_time_GT - start_time_GT
-            print(f"Elapsed time for {GTnumber} GTs: {elapsed_time_GT}")
-            print('----------------------------------')
+            logger.info('Elapsed time for %s GTs: %s', GTnumber, elapsed_time_GT)
+            logger.info('----------------------------------')
 
     # plotLatenciesBars(percentages, outputPath)
 
-    print('----------------------------------')
-    print('Time:')
+    logger.info('----------------------------------')
+    logger.info('Time:')
     end_time = datetime.now()
-    print(end_time.strftime("%H:%M:%S"))
-    print('----------------------------------')
+    logger.info('%s', end_time.strftime("%H:%M:%S"))
+    logger.info('----------------------------------')
     elapsed_time = end_time - start_time
-    print(f"Elapsed time: {elapsed_time}")
-    print('----------------------------------')
+    logger.info('Elapsed time: %s', elapsed_time)
+    logger.info('----------------------------------')
 
 
 import yaml
@@ -375,7 +392,7 @@ if __name__ == '__main__':
     else:
         agent_class = None
         run_mode_name = "ShortestPath"
-        print("[INFO] Running in shortest-path mode. RL model is disabled.")
+        logger.info('Running in shortest-path mode. RL model is disabled.')
     
     
     current_dir = os.getcwd()
@@ -400,7 +417,7 @@ if __name__ == '__main__':
             outputPath = os.path.join(current_dir, mode_load_dir + f'test_teacher_network_avUserLoad{avUserLoad}/')
         if not os.path.exists(outputPath):
             os.makedirs(outputPath)
-    sys.stdout = Logger(outputPath + 'logfile.log')
+    setup_logging(outputPath)
 
     config_data['outputPath'] = outputPath
     config_data['CurrentGTnumber'] = GTs[0]

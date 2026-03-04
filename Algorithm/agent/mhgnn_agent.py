@@ -49,6 +49,10 @@ class MHGNNAgent(BaseAgent):
         self.updateF = config.updateF
         self.epsilon = []
 
+        self.w1 = config.get('w1', 40)        # rewards the getting to empty queues
+        self.w2 = config.get('w2', 20)        # rewards getting closes phisycally
+        self.w4 = config.get('w4', 5)         # Normalization for the distance reward, for the traveled distance factor
+
     def _build_policy(self) -> Module:
         
         return MHGNNNetwork(config=self.config)
@@ -187,9 +191,9 @@ class MHGNNAgent(BaseAgent):
 
     def _calculate_reward_v1(self, block, sat, prevSat, is_terminal=False, is_failure=False):
         """Helper to calculate reward based on state."""
-        w1 = 40        # rewards the getting to empty queues
-        w2 = 20        # rewards getting closes phisycally   
-        w4 = 5         # Normalization for the distance reward, for the traveled distance factor 
+        w1 = self.w1        # rewards the getting to empty queues
+        w2 = self.w2        # rewards getting closes phisycally   
+        w4 = self.w4         # Normalization for the distance reward, for the traveled distance factor 
         ArriveReward = 50        # Reward given to the system in case it sends the data block to the satellite linked to the destination gateway
         distanceRew = 4          # 1: Distance reward normalized to total distance.
                                  # 2: Distance reward normalized to average moving possibilities

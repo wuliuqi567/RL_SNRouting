@@ -19,6 +19,6 @@ input_dim: 10 # dimension of input each node features
 train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
-mode_load_dir: "SimResults/MHGNN/2026-03-02/23-57-40_Starlink_3s_GTs_[2]/"
-outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/MHGNN/2026-03-03/21-00-34_Starlink_3s_GTs_[2]/train/'
+mode_load_dir: "SimResults/MHGNN/2026-03-03/10-29-33_Starlink_3s_GTs_[2]/"
+outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/MHGNN/2026-03-04/21-19-28_Starlink_3s_GTs_[2]/train/'
 CurrentGTnumber: 2
