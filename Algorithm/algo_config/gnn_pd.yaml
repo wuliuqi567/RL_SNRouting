@@ -1,7 +1,7 @@
 
 # base config
 agent: 'MHGNN' #
-project_name: "satNetEnv_MHGNN_test"
+project_name: "satNetEnv_MHGNN_reward_v1"
 
 # agent hyperparameters
 ## model parameters
@@ -38,7 +38,7 @@ batch_size   : 128        # batchSize samples are taken from bufferSize samples 
 
 ## training parameters
 
-w1: 40        # rewards the getting to empty queues
+w1: 50        # rewards the getting to empty queues
 w2: 20        # rewards getting closes phisycally
 w4: 5         # Normalization for the distance reward, for the traveled distance factor
 

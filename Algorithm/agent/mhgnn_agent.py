@@ -49,9 +49,9 @@ class MHGNNAgent(BaseAgent):
         self.updateF = config.updateF
         self.epsilon = []
 
-        self.w1 = config.get('w1', 40)        # rewards the getting to empty queues
-        self.w2 = config.get('w2', 20)        # rewards getting closes phisycally
-        self.w4 = config.get('w4', 5)         # Normalization for the distance reward, for the traveled distance factor
+        self.w1 = hasattr(config, 'w1') and config.w1 or 50        # rewards the getting to empty queues
+        self.w2 = hasattr(config, 'w2') and config.w2 or 20        # rewards getting closes phisycally
+        self.w4 = hasattr(config, 'w4') and config.w4 or 5         # Normalization for the distance reward, for the traveled distance factor
 
     def _build_policy(self) -> Module:
         
