@@ -1,4 +1,5 @@
 import math, os, time
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import networkx as nx
@@ -11,6 +12,9 @@ from Class.orbitalPlane import OrbitalPlane
 from Class.edge import edge
 import numba
 import pickle
+
+
+logger = logging.getLogger(__name__)
 
 def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPath):
     '''
@@ -55,28 +59,57 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
         
     # save congestion test data
     # blockPath = f"./Results/Congestion_Test/{pathing} {float(pd.read_csv('inputRL.csv')['Test length'][0])}/"
-    print('Saving congestion test data...\n')
+        logger.info('Saving congestion test data...')
     blockPath = outputPath + '/Congestion_Test/'     
     os.makedirs(blockPath, exist_ok=True)
     try:
         # global CurrentGTnumber
         np.save("{}blocks_{}".format(blockPath, system_configure.CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
     except pickle.PicklingError:
-        print('Error with pickle and profiling')
+            logger.error('Error with pickle and profiling')
 
     avgTime = np.mean(allTransmissionTimes)
     totalTime = sum(allTransmissionTimes)
+    created_blocks = len(createdBlocks)
+    received_blocks = len(receivedDataBlocks)
+    stuck_blocks = created_blocks - received_blocks
 
-    print("\n########## Results #########\n")
-    print(f"The simulation took {timeToSim} seconds to run")
-    print(f"A total of {len(createdBlocks)} data blocks were created")
-    print(f"A total of {len(receivedDataBlocks)} data blocks were transmitted")
-    print(f"A total of {len(createdBlocks) - len(receivedDataBlocks)} data blocks were stuck")
-    print(f"Average transmission time for all blocks were {avgTime}")
-    print('Total latecies:\nQueue time: {}%\nTransmission time: {}%\nPropagation time: {}%'.format(
-        '%.4f' % float(sum(queueLat)/totalTime*100),
-        '%.4f' % float(sum(txLat)/totalTime*100),
-        '%.4f' % float(sum(propLat)/totalTime*100)))
+    if totalTime > 0:
+        queue_pct = float(sum(queueLat) / totalTime * 100)
+        tx_pct = float(sum(txLat) / totalTime * 100)
+        prop_pct = float(sum(propLat) / totalTime * 100)
+    else:
+        queue_pct = 0.0
+        tx_pct = 0.0
+        prop_pct = 0.0
+
+    logger.info('########## Results #########')
+    logger.info('The simulation took %s seconds to run', timeToSim)
+    logger.info('A total of %s data blocks were created', created_blocks)
+    logger.info('A total of %s data blocks were transmitted', received_blocks)
+    logger.info('A total of %s data blocks were stuck', stuck_blocks)
+    logger.info('Average transmission time for all blocks were %s', avgTime)
+    logger.info(
+        'Total latecies: Queue time: %.4f%%, Transmission time: %.4f%%, Propagation time: %.4f%%',
+        queue_pct,
+        tx_pct,
+        prop_pct,
+    )
+
+    block_info_file = os.path.join(outputPath, 'blockInfo.csv')
+    block_info_row = pd.DataFrame([
+        {
+            'createdBlocks': created_blocks,
+            'receivedDataBlocks': received_blocks,
+            'stuckBlocks': stuck_blocks,
+            'avgTime': avgTime,
+            'Queue time': queue_pct,
+            'Transmission time': tx_pct,
+            'Propagation time': prop_pct,
+        }
+    ])
+    write_header = not os.path.exists(block_info_file)
+    block_info_row.to_csv(block_info_file, mode='a', index=False, header=write_header)
 
     results = Results(finishedBlocks=blocks,
                       constellation=constellationType,
@@ -85,9 +118,9 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
                       meanQueueLatency=np.mean(queueLat),
                       meanPropLatency=np.mean(propLat),
                       meanTransLatency=np.mean(txLat),
-                      perQueueLatency = sum(queueLat)/totalTime*100,
-                      perPropLatency = sum(propLat)/totalTime*100,
-                      perTransLatency = sum(txLat)/totalTime*100)
+                      perQueueLatency = queue_pct,
+                      perPropLatency = prop_pct,
+                      perTransLatency = tx_pct)
 
     return results, allLatencies, pathBlocks, blocks
 

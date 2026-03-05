@@ -26,11 +26,12 @@ logger = logging.getLogger(__name__)
 
 def setup_logging(output_path=None):
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    handlers = [logging.StreamHandler()]
+    handlers = []
+    handlers = [logging.StreamHandler()] # 输出到控制台
 
     if output_path is not None:
         log_file = os.path.join(output_path, 'logfile_logging.log')
-        handlers.append(logging.FileHandler(log_file, mode='a', encoding='utf-8'))
+        handlers.append(logging.FileHandler(log_file, mode='a', encoding='utf-8')) # 输出到文件，追加模式
 
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
