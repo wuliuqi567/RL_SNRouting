@@ -1,6 +1,6 @@
 # base config
 agent: 'MHGNN' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
-use_rl_model: true # false: shortest-path only (no RL model)
+use_rl_model: false # false: shortest-path only (no RL model)
 seed: 42
 logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
 project_name: "satNetEnv3"
@@ -20,5 +20,5 @@ train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
 mode_load_dir: "SimResults/MHGNN/2026-03-03/21-00-19_Starlink_3s_GTs_[2]/"
-outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/MHGNN/2026-03-05/20-13-27_Starlink_3s_GTs_[2]/train/'
+outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/ShortestPath/2026-03-05/21-12-07_Starlink_3s_GTs_[2]_avUserLoad26/'
 CurrentGTnumber: 2

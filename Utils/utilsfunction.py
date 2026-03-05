@@ -16,113 +16,126 @@ import pickle
 
 logger = logging.getLogger(__name__)
 
-def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPath):
-    '''
-    General Block transmission stats
-    '''
-    allTransmissionTimes = []    # list of all the transmission times of the blocks
-    largestTransmissionTime = (0, None) # (Transmission time, Block) of the largest transmission time
-    mostHops = (0, None) # (Number of hops, Block) of the block with most hops
-    queueLat = [] # list of all the queue latencies of the blocks
-    txLat = [] # lisr of 
-    propLat = [] 
-    # latencies = [queueLat, txLat, propLat]
-    blocks = [] # 
-    allLatencies= []
-    pathBlocks  = [[],[]]
-    first       = earth.gateways[0]
-    second      = earth.gateways[1]
+# def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPath):
+#     '''
+#     General Block transmission stats
+#     '''
+#     allTransmissionTimes = []    # list of all the transmission times of the blocks
+#     largestTransmissionTime = (0, None) # (Transmission time, Block) of the largest transmission time
+#     mostHops = (0, None) # (Number of hops, Block) of the block with most hops
+#     queueLat = [] # list of all the queue latencies of the blocks
+#     txLat = [] # lisr of 
+#     propLat = [] 
+#     # latencies = [queueLat, txLat, propLat]
+#     blocks = [] # 
+#     allLatencies= []
+#     pathBlocks  = [[],[]]
+#     first       = earth.gateways[0]
+#     second      = earth.gateways[1]
 
-    for block in receivedDataBlocks: # 
-        time = block.getTotalTransmissionTime()
-        hops = len(block.checkPoints)
-        blocks.append(BlocksForPickle(block))
+#     for block in receivedDataBlocks: # 
+#         time = block.getTotalTransmissionTime()
+#         hops = len(block.checkPoints)
+#         blocks.append(BlocksForPickle(block))
 
-        if largestTransmissionTime[0] < time:
-            largestTransmissionTime = (time, block)
+#         if largestTransmissionTime[0] < time:
+#             largestTransmissionTime = (time, block)
 
-        if mostHops[0] < hops:
-            mostHops = (hops, block)
+#         if mostHops[0] < hops:
+#             mostHops = (hops, block)
 
-        allTransmissionTimes.append(time)
+#         allTransmissionTimes.append(time)
 
-        queueLat.append(block.getQueueTime()[0])
-        txLat.append(block.txLatency)
-        propLat.append(block.propLatency)
+#         queueLat.append(block.getQueueTime()[0])
+#         txLat.append(block.txLatency)
+#         propLat.append(block.propLatency)
         
-        # [creation time, total latency, arrival time, source, destination, block ID, queue time, transmission latency, prop latency]
-        allLatencies.append([block.creationTime, block.totLatency, block.creationTime+block.totLatency, block.source.name, block.destination.name, block.ID, block.getQueueTime()[0], block.txLatency, block.propLatency])
-        # pre-process the received data blocks. create the rows that will be saved in csv
-        if block.source == first and block.destination == second:
-            pathBlocks[0].append([block.totLatency, block.creationTime+block.totLatency])
-            pathBlocks[1].append(block)
+#         # [creation time, total latency, arrival time, source, destination, block ID, queue time, transmission latency, prop latency]
+#         allLatencies.append([block.creationTime, block.totLatency, block.creationTime+block.totLatency, block.source.name, block.destination.name, block.ID, block.getQueueTime()[0], block.txLatency, block.propLatency])
+#         # pre-process the received data blocks. create the rows that will be saved in csv
+#         if block.source == first and block.destination == second:
+#             pathBlocks[0].append([block.totLatency, block.creationTime+block.totLatency])
+#             pathBlocks[1].append(block)
         
-    # save congestion test data
-    # blockPath = f"./Results/Congestion_Test/{pathing} {float(pd.read_csv('inputRL.csv')['Test length'][0])}/"
-        logger.info('Saving congestion test data...')
-    blockPath = outputPath + '/Congestion_Test/'     
-    os.makedirs(blockPath, exist_ok=True)
-    try:
-        # global CurrentGTnumber
-        np.save("{}blocks_{}".format(blockPath, system_configure.CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
-    except pickle.PicklingError:
-            logger.error('Error with pickle and profiling')
+#     # save congestion test data
+#     # blockPath = f"./Results/Congestion_Test/{pathing} {float(pd.read_csv('inputRL.csv')['Test length'][0])}/"
+#         logger.info('Saving congestion test data...')
+#     blockPath = outputPath + '/Congestion_Test/'     
+#     os.makedirs(blockPath, exist_ok=True)
+#     try:
+#         # global CurrentGTnumber
+#         np.save("{}blocks_{}".format(blockPath, system_configure.CurrentGTnumber), np.asarray(blocks),allow_pickle=True)
+#     except pickle.PicklingError:
+#             logger.error('Error with pickle and profiling')
 
-    avgTime = np.mean(allTransmissionTimes)
-    totalTime = sum(allTransmissionTimes)
-    created_blocks = len(createdBlocks)
-    received_blocks = len(receivedDataBlocks)
-    stuck_blocks = created_blocks - received_blocks
+#     avgTime = np.mean(allTransmissionTimes)
+#     totalTime = sum(allTransmissionTimes)
+#     created_blocks = len(createdBlocks)
+#     received_blocks = len(receivedDataBlocks)
+#     stuck_blocks = created_blocks - received_blocks
 
-    if totalTime > 0:
-        queue_pct = float(sum(queueLat) / totalTime * 100)
-        tx_pct = float(sum(txLat) / totalTime * 100)
-        prop_pct = float(sum(propLat) / totalTime * 100)
-    else:
-        queue_pct = 0.0
-        tx_pct = 0.0
-        prop_pct = 0.0
+#     if totalTime > 0:
+#         queue_pct = float(sum(queueLat) / totalTime * 100)
+#         tx_pct = float(sum(txLat) / totalTime * 100)
+#         prop_pct = float(sum(propLat) / totalTime * 100)
+#     else:
+#         queue_pct = 0.0
+#         tx_pct = 0.0
+#         prop_pct = 0.0
 
-    logger.info('########## Results #########')
-    logger.info('The simulation took %s seconds to run', timeToSim)
-    logger.info('A total of %s data blocks were created', created_blocks)
-    logger.info('A total of %s data blocks were transmitted', received_blocks)
-    logger.info('A total of %s data blocks were stuck', stuck_blocks)
-    logger.info('Average transmission time for all blocks were %s', avgTime)
-    logger.info(
-        'Total latecies: Queue time: %.4f%%, Transmission time: %.4f%%, Propagation time: %.4f%%',
-        queue_pct,
-        tx_pct,
-        prop_pct,
-    )
+#     logger.info('########## Results #########')
+#     logger.info('The simulation took %s seconds to run', timeToSim)
+#     logger.info('A total of %s data blocks were created', created_blocks)
+#     logger.info('A total of %s data blocks were transmitted', received_blocks)
+#     logger.info('A total of %s data blocks were stuck', stuck_blocks)
+#     logger.info('Average transmission time for all blocks were %s', avgTime)
+#     logger.info(
+#         'Total latecies: Queue time: %.4f%%, Transmission time: %.4f%%, Propagation time: %.4f%%',
+#         queue_pct,
+#         tx_pct,
+#         prop_pct,
+#     )
 
-    block_info_file = os.path.join(outputPath, 'blockInfo.csv')
-    block_info_row = pd.DataFrame([
-        {
-            'createdBlocks': created_blocks,
-            'receivedDataBlocks': received_blocks,
-            'stuckBlocks': stuck_blocks,
-            'avgTime': avgTime,
-            'Queue time': queue_pct,
-            'Transmission time': tx_pct,
-            'Propagation time': prop_pct,
-        }
-    ])
-    write_header = not os.path.exists(block_info_file)
-    block_info_row.to_csv(block_info_file, mode='a', index=False, header=write_header)
+#     os.makedirs(outputPath, exist_ok=True)
+#     block_info_file = os.path.join(outputPath, 'blockInfo.csv')
+#     print('Saving block transmission stats to {}'.format(block_info_file))
+#     block_info_columns = [
+#         'createdBlocks',
+#         'receivedDataBlocks',
+#         'stuckBlocks',
+#         'avgTime',
+#         'Queue time',
+#         'Transmission time',
+#         'Propagation time',
+#     ]
+#     block_info_row = pd.DataFrame([
+#         {
+#             'createdBlocks': created_blocks,
+#             'receivedDataBlocks': received_blocks,
+#             'stuckBlocks': stuck_blocks,
+#             'avgTime': avgTime,
+#             'Queue time': queue_pct,
+#             'Transmission time': tx_pct,
+#             'Propagation time': prop_pct,
+#         }
+#     ], columns=block_info_columns)
 
-    results = Results(finishedBlocks=blocks,
-                      constellation=constellationType,
-                      GTs=GTs,
-                      meanTotalLatency=avgTime,
-                      meanQueueLatency=np.mean(queueLat),
-                      meanPropLatency=np.mean(propLat),
-                      meanTransLatency=np.mean(txLat),
-                      perQueueLatency = queue_pct,
-                      perPropLatency = prop_pct,
-                      perTransLatency = tx_pct)
+#     if not os.path.exists(block_info_file):
+#         pd.DataFrame(columns=block_info_columns).to_csv(block_info_file, index=False)
+#     block_info_row.to_csv(block_info_file, mode='a', index=False, header=False)
 
-    return results, allLatencies, pathBlocks, blocks
+#     results = Results(finishedBlocks=blocks,
+#                       constellation=constellationType,
+#                       GTs=GTs,
+#                       meanTotalLatency=avgTime,
+#                       meanQueueLatency=np.mean(queueLat),
+#                       meanPropLatency=np.mean(propLat),
+#                       meanTransLatency=np.mean(txLat),
+#                       perQueueLatency = queue_pct,
+#                       perPropLatency = prop_pct,
+#                       perTransLatency = tx_pct)
+
+#     return results, allLatencies, pathBlocks, blocks
 
 
 def get_direction(Satellites):

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
 from system_configure import *
 from globalvar import *
 from Class.auxiliaryClass import Results, BlocksForPickle
@@ -9,6 +10,9 @@ import pandas as pd
 from collections import defaultdict
 import seaborn as sns
 import torch
+
+
+logger = logging.getLogger(__name__)
 
 def plotLatencies(percentages, pathing, savePath):
     '''
@@ -133,18 +137,59 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
 
     avgTime = np.mean(allTransmissionTimes)
     totalTime = sum(allTransmissionTimes)
+    created_blocks = len(createdBlocks)
+    received_blocks = len(receivedDataBlocks)
+    stuck_blocks = created_blocks - received_blocks - len(dropBlocks)
 
-    print("\n########## Results #########\n")
-    print(f"The simulation took {timeToSim} seconds to run")
-    print(f"A total of {len(createdBlocks)} data blocks were created")
-    print(f"A total of {len(receivedDataBlocks)} data blocks were transmitted")
-    print(f"A total of {len(dropBlocks)} data blocks were lost")
-    print(f"A total of {len(createdBlocks) - len(receivedDataBlocks) - len(dropBlocks)} data blocks were stuck")
-    print(f"Average transmission time for all blocks were {avgTime}")
-    print('Total latecies:\nQueue time: {}%\nTransmission time: {}%\nPropagation time: {}%'.format(
-        '%.4f' % float(sum(queueLat)/totalTime*100),
-        '%.4f' % float(sum(txLat)/totalTime*100),
-        '%.4f' % float(sum(propLat)/totalTime*100)))
+    if totalTime > 0:
+        queue_pct = float(sum(queueLat) / totalTime * 100)
+        tx_pct = float(sum(txLat) / totalTime * 100)
+        prop_pct = float(sum(propLat) / totalTime * 100)
+    else:
+        queue_pct = 0.0
+        tx_pct = 0.0
+        prop_pct = 0.0
+
+    logger.info('########## Results #########')
+    logger.info('The simulation took %s seconds to run', timeToSim)
+    logger.info('A total of %s data blocks were created', created_blocks)
+    logger.info('A total of %s data blocks were transmitted', received_blocks)
+    logger.info('A total of %s data blocks were lost', len(dropBlocks))
+    logger.info('A total of %s data blocks were stuck', stuck_blocks)
+    logger.info('Average transmission time for all blocks were %s', avgTime)
+    logger.info(
+        'Total latecies: Queue time: %.4f%%, Transmission time: %.4f%%, Propagation time: %.4f%%',
+        queue_pct,
+        tx_pct,
+        prop_pct
+    )
+
+    os.makedirs(outputPath, exist_ok=True)
+    block_info_file = os.path.join(outputPath, 'blockInfo.csv')
+    block_info_columns = [
+        'createdBlocks',
+        'receivedDataBlocks',
+        'stuckBlocks',
+        'avgTime',
+        'Queue time',
+        'Transmission time',
+        'Propagation time',
+    ]
+    block_info_row = pd.DataFrame([
+        {
+            'createdBlocks': created_blocks,
+            'receivedDataBlocks': received_blocks,
+            'stuckBlocks': stuck_blocks,
+            'avgTime': avgTime,
+            'Queue time': queue_pct,
+            'Transmission time': tx_pct,
+            'Propagation time': prop_pct,
+        }
+    ], columns=block_info_columns)
+
+    if not os.path.exists(block_info_file):
+        pd.DataFrame(columns=block_info_columns).to_csv(block_info_file, index=False)
+    block_info_row.to_csv(block_info_file, mode='a', index=False, header=False)
 
     results = Results(finishedBlocks=blocks,
                       constellation=constellationType,
@@ -153,9 +198,9 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
                       meanQueueLatency=np.mean(queueLat),
                       meanPropLatency=np.mean(propLat),
                       meanTransLatency=np.mean(txLat),
-                      perQueueLatency = sum(queueLat)/totalTime*100,
-                      perPropLatency = sum(propLat)/totalTime*100,
-                      perTransLatency = sum(txLat)/totalTime*100)
+                      perQueueLatency = queue_pct,
+                      perPropLatency = prop_pct,
+                      perTransLatency = tx_pct)
 
     return results, allLatencies, pathBlocks, blocks
 
