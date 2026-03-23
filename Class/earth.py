@@ -91,8 +91,7 @@ class Earth:
 
         # create data Blocks on all GTs.
         if not getRates:
-            for gt in self.gateways:
-                gt.makeFillBlockProcesses(self.gateways)
+            self._setupTrafficProcesses()
 
         # create constellation of satellites
         self.LEO = create_Constellation(constellation, env, self)
@@ -105,6 +104,41 @@ class Earth:
         # Simpy process for handling moving the constellation and the satellites within the constellation
         # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
     
+    def _setupTrafficProcesses(self):
+        """
+        Set up traffic-generation processes on each GT according to the configured trafficMode.
+
+        Supported modes (set trafficMode in system_configure.py):
+            "all2all"           – every GT sends to every other GT (original behaviour)
+            "fixed_pairs"       – only user-specified (src, dst, rate) pairs generate traffic
+            "all2all_and_fixed" – both modes run simultaneously
+        """
+        mode = getattr(system_configure, 'trafficMode', 'all2all')
+        pairs_cfg = getattr(system_configure, 'trafficPairs', [])
+
+        # build a name → GT lookup for the fixed-pair definitions
+        gt_by_name = {gt.name: gt for gt in self.gateways}
+
+        if mode in ('all2all'):
+            for gt in self.gateways:
+                gt.makeFillBlockProcesses(self.gateways)
+
+        if mode in ('fixed_pairs'):
+            # group pair definitions by source GT
+            from collections import defaultdict
+            src_pairs = defaultdict(list)
+            for src_name, dst_name, rate_bps in pairs_cfg:
+                if src_name not in gt_by_name:
+                    print(f"[trafficPairs] WARNING: source GT '{src_name}' not found among active gateways, skipping.")
+                    continue
+                if dst_name not in gt_by_name:
+                    print(f"[trafficPairs] WARNING: destination GT '{dst_name}' not found among active gateways, skipping.")
+                    continue
+                src_pairs[src_name].append((gt_by_name[dst_name], float(rate_bps)))
+
+            for src_name, pair_defs in src_pairs.items():
+                gt_by_name[src_name].makeFillBlockProcessesFixedPairs(pair_defs)
+
     def get_max_queue_length(self):
         """获取当前系统中所有节点的最大队列长度"""
         max_length = 0

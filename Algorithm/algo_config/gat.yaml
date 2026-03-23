@@ -4,12 +4,12 @@ agent: 'GAT' #
 project_name: "satNetEnv_OneHopGAT"
 
 # environment parameters
-n_order_adj: 4 # number of order for adjacency matrix
+n_order_adj: 1 # number of order for adjacency matrix
 
 
 #gat parameters
 input_dim: 10
-num_layers: 3 # corresponding to modifying n_order_adj
+num_layers: 1 # corresponding to modifying n_order_adj
 num_heads: 2
 gat_hidden_feats: 8
 mlp_hidden_feats: 32

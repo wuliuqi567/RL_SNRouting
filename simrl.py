@@ -162,17 +162,69 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
 
     logger.info('Traffic generated per GT (totalAvgFlow per Milliard):')
     logger.info('----------------------------------')
-    for GT in earth.gateways:
-        mins = []
-        if GT.linkedSat[0] is not None:
 
-            for pathKey in GT.paths:
-                _, minimum = findBottleneck(GT.paths[pathKey], earth)
-                mins.append(minimum)
-            if GT.dataRate < GT.linkedSat[1].downRate:
-                GT.getTotalFlow(1, flowGenType, 1, GT.dataRate, Fraction)  # using data rate of the GSL uplink
-            else:
-                GT.getTotalFlow(1, flowGenType, 1, GT.linkedSat[1].downRate, Fraction)  # using data rate of the GSL downlink
+    _traffic_mode = getattr(system_configure, 'trafficMode', 'all2all')
+    _traffic_pairs = getattr(system_configure, 'trafficPairs', [])
+    _supports_all2all = _traffic_mode == 'all2all'
+    _supports_fixed_pairs = _traffic_mode == 'fixed_pairs'
+
+    pair_flow_by_src = {}
+    if _supports_fixed_pairs:
+        for src, _dst, rate in _traffic_pairs:
+            pair_flow_by_src[src] = pair_flow_by_src.get(src, 0) + rate
+
+    debug_bottleneck = logger.isEnabledFor(logging.DEBUG)
+
+    if _supports_fixed_pairs:
+        # fixed_pairs: only configured source gateways inject traffic
+        src_to_dsts = {}
+        for src, dst, _rate in _traffic_pairs:
+            src_to_dsts.setdefault(src, set()).add(dst)
+
+        gt_by_name = {gt.name: gt for gt in earth.gateways}
+        for src_name, pair_flow in pair_flow_by_src.items():
+            GT = gt_by_name.get(src_name)
+            if GT is None or GT.linkedSat[0] is None:
+                continue
+
+            if debug_bottleneck:
+                for dst_name in src_to_dsts.get(src_name, set()):
+                    gt_path = GT.paths.get(dst_name)
+                    if not gt_path:
+                        continue
+                    _bottleneck, minimum = findBottleneck(gt_path, earth)
+                    logger.debug(
+                        'minimum data rate for path %s -> %s: %s Mbps',
+                        GT.name,
+                        dst_name,
+                        minimum / 1e6,
+                    )
+
+            GT.totalAvgFlow = pair_flow
+            logger.info('%s: %s Gbps total flow (fixed pairs)', GT.name, GT.totalAvgFlow / 1e9)
+
+    elif _supports_all2all:
+        # all2all: every connected gateway injects traffic
+        for GT in earth.gateways:
+            if GT.linkedSat[0] is None:
+                continue
+
+            if debug_bottleneck:
+                for pathKey, gt_path in GT.paths.items():
+                    _bottleneck, minimum = findBottleneck(gt_path, earth)
+                    logger.debug(
+                        'minimum data rate for path %s -> %s: %s Mbps',
+                        GT.name,
+                        pathKey,
+                        minimum / 1e6,
+                    )
+
+            flow_cap = min(GT.dataRate, GT.linkedSat[1].downRate)
+            GT.getTotalFlow(1, flowGenType, 1, flow_cap, Fraction)
+
+    else:
+        logger.warning('Unknown trafficMode: %s (no GT traffic flow configured in initialize)', _traffic_mode)
+
 
     total_network_injected_flow = sum(
         gt.totalAvgFlow for gt in earth.gateways
@@ -238,7 +290,7 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
 
         # run the simulation
         env.process(simProgress(simulationTimelimit, env))
-        env.process(earth1.monitor_max_queue(interval=5))  # 每5ms统计一次
+        # env.process(earth1.monitor_max_queue(interval=5))  # 每5ms统计一次
         startTime = time.time()
         try:
             env.run(simulationTimelimit)
@@ -369,6 +421,7 @@ def get_configs():
 
 if __name__ == '__main__':
     import os
+    import re
     from ruamel.yaml import YAML
 
     yaml_ruamel = YAML()
@@ -394,13 +447,37 @@ if __name__ == '__main__':
         agent_class = None
         run_mode_name = "ShortestPath"
         logger.info('Running in shortest-path mode. RL model is disabled.')
+
+    traffic_suffix = ''
+    _traffic_mode = getattr(system_configure, 'trafficMode', 'all2all')
+    _traffic_pairs = getattr(system_configure, 'trafficPairs', [])
+    load_suffix = '' if _traffic_mode == 'fixed_pairs' else f'_avUserLoad{avUserLoad}'
+    if _traffic_mode == 'fixed_pairs' and _traffic_pairs:
+        total_pair_flow_bps = sum(float(rate) for _src, _dst, rate in _traffic_pairs)
+
+        def _abbr_gt_name(gt_name):
+            tokens = re.findall(r'[A-Za-z0-9]+', str(gt_name))
+            if not tokens:
+                return 'X'
+            # 取每个词首字母，限制长度防止路径过长
+            return ''.join(token[0].upper() for token in tokens)[:8]
+
+        pair_tags = [
+            f"{_abbr_gt_name(src)}2{_abbr_gt_name(dst)}{float(rate)/1e6:.0f}M"
+            for src, dst, rate in _traffic_pairs
+        ]
+        pair_preview = '_'.join(pair_tags[:3])
+        if len(pair_tags) > 3:
+            pair_preview += f"_p{len(pair_tags) - 3}"
+
+        traffic_suffix = f"_fp{len(_traffic_pairs)}_t{total_pair_flow_bps/1e9:.2f}G_{pair_preview}"
     
     
     current_dir = os.getcwd()
     if not use_rl_model:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
         filetime_hms = datetime.now().strftime("%H-%M-%S")
-        outputPath = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}' + f'_avUserLoad{avUserLoad}/'
+        outputPath = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}/'
         os.makedirs(outputPath, exist_ok=True)
     elif config_data["train_TA_model"]:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
@@ -408,7 +485,7 @@ if __name__ == '__main__':
         # data_inputrl = pd.read_csv("inputRL.csv")
         # constellation = data_inputrl['Constellation'][0]
         # sim_time = data_inputrl['Test length'][0]
-        outputPath      = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}/train/'
+        outputPath      = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}/train/'
         os.makedirs(outputPath, exist_ok=True)
     else:
         mode_load_dir = config_data.get('mode_load_dir', None)

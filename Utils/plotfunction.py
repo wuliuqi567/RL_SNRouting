@@ -739,50 +739,110 @@ def plotCongestionMap(self, paths, outPath, GTnumber, plot_separately=True):
                 print(f'Congestion map for {route} not available')
 
 
-def findBottleneck(path, earth, plot = False, minimum = None):
-    # Find the bottleneck of a route.
+def findBottleneck(path, earth, plot=False, minimum=None):
+    """
+    找出通信路径中的瓶颈链路。
+    
+    该函数遍历给定路径中的所有链路（网关到卫星、卫星到卫星、卫星回到网关），
+    收集每条链路的信息，包括链路端点、数据速率、地理位置等信息，
+    最后返回所有链路的瓶颈信息（最小数据速率的链路）。
+    
+    参数：
+        path (list): 通信路径，形式为 [(源ID, ...), (中间节点ID, ...), ..., (目的地ID, ...)]
+                    其中path[0][0]是源节点ID，path[-1][0]是目的地节点ID
+        earth (Earth): 地球环境对象，包含所有网关(gateways)和LEO星座(LEO)信息
+        plot (bool): 是否绘制路径及瓶颈链路的地图，默认为False
+        minimum (float): 可选的最小数据速率阈值，用于计算链路时延（最小速率/链路速率）
+    
+    返回：
+        tuple: (bottleneck, minimum)
+            - bottleneck (list): 包含4个子列表的列表
+                - bottleneck[0]: 链路信息列表，每个元素为"源节点ID,目的地节点ID"的字符串
+                - bottleneck[1]: 数据速率列表（Gbps或相应单位），对应各条链路的传输速率
+                - bottleneck[2]: 纬度列表，记录每条链路的源节点纬度坐标
+                - bottleneck[3]: 时延列表（仅当输入minimum>0时），计算为minimum/链路速率
+            - minimum (float): 路径中所有链路的最小数据速率值
+    
+    函数流程：
+        1. 处理起始网关段：遍历所有网关，找到路径源点对应的网关，
+           记录从该网关到下一相邻节点(path[1][0])的链路信息
+        2. 处理中间链路段：遍历路径中的所有卫星节点，对于每个卫星，
+           查找其星座间(interSats)和星座内(intraSats)的链路，
+           匹配路径中的相邻节点对，记录链路参数
+        3. 处理终结网关段：找到路径目的地对应的网关，
+           记录从前一相邻节点(path[-2][0])到该网关的下行链路(downRate)信息
+        4. 可视化：如果plot=True，在地球地图上绘制完整路径及瓶颈链路
+        5. 统计：计算所有链路中的最小数据速率作为该路径的瓶颈
+    """
+    # 初始化瓶颈信息容器：[链路信息, 数据速率, 纬度, 时延]
     bottleneck = [[], [], [], []]
+    
+    # ===== 第一阶段：收集起始网关到第一个卫星的链路信息 =====
     for GT in earth.gateways:
         if GT.name == path[0][0]:
+            # 记录网关上行链路：源网关 -> 路径中的下一个节点
             bottleneck[0].append(str(path[0][0].split(",")[0]) + "," + str(path[1][0]))
+            # 记录该网关的上行数据速率
             bottleneck[1].append(GT.dataRate)
+            # 记录该网关的纬度
             bottleneck[2].append(GT.latitude)
+            # 如果提供了最小速率参数，计算该链路的时延（最小速率/链路速率）
             if minimum:
-                bottleneck[3].append(minimum/GT.dataRate)
+                bottleneck[3].append(minimum / GT.dataRate)
 
-    for i, step in enumerate(path[1:], 1):
+    # ===== 第二阶段：收集路径中间的卫星间链路信息 =====
+    for i, step in enumerate(path[1:], 1):  # 从path[1]开始遍历，i从1开始
+        # 遍历所有LEO轨道平面
         for orbit in earth.LEO:
+            # 遍历该轨道平面中的所有卫星
             for satellite in orbit.sats:
+                # 找到路径中当前节点对应的卫星
                 if satellite.ID == step[0]:
-
+                    
+                    # 检查该卫星的星座间链路(inter-plane ISL)
                     for sat in satellite.interSats:
-                        if sat[1].ID == path[i + 1][0]:
+                        # sat[1]是链接目标卫星，sat[2]是链路数据速率
+                        if sat[1].ID == path[i + 1][0]:  # 检查目标是否为路径中的下一节点
                             bottleneck[0].append(str(path[i][0]) + "," + str(path[i + 1][0]))
-                            bottleneck[1].append(sat[2])
+                            bottleneck[1].append(sat[2])  # 记录星座间链路速率
                             bottleneck[2].append(satellite.latitude)
                             if minimum:
                                 bottleneck[3].append(minimum / sat[2])
+                    
+                    # 检查该卫星的星座内链路(intra-plane ISL)
                     for sat in satellite.intraSats:
-                        if sat[1].ID == path[i + 1][0]:
+                        if sat[1].ID == path[i + 1][0]:  # 检查目标是否为路径中的下一节点
                             bottleneck[0].append(str(path[i][0]) + "," + str(path[i + 1][0]))
-                            bottleneck[1].append(sat[2])
+                            bottleneck[1].append(sat[2])  # 记录星座内链路速率
                             bottleneck[2].append(satellite.latitude)
                             if minimum:
                                 bottleneck[3].append(minimum / sat[2])
-    for GT in earth.gateways:
-        if GT.name == path[-1][0]:
-            bottleneck[0].append(str(path[-2][0]) + "," + str(path[-1][0].split(",")[0]))
-            bottleneck[1].append(GT.linkedSat[1].downRate)
-            bottleneck[2].append(GT.latitude)
-            if minimum:
-                bottleneck[3].append(minimum/GT.dataRate)
 
+    # ===== 第三阶段：收集最后一个卫星到目地网关的链路信息 =====
+    for GT in earth.gateways:
+        if GT.name == path[-1][0]:  # 找到路径目的地对应的网关
+            # 记录网关下行链路：路径中的前一个节点 -> 目地网关
+            bottleneck[0].append(str(path[-2][0]) + "," + str(path[-1][0].split(",")[0]))
+            # 记录该网关的下行数据速率
+            bottleneck[1].append(GT.linkedSat[1].downRate)
+            # 记录该网关的纬度
+            bottleneck[2].append(GT.latitude)
+            # 如果提供了最小速率参数，计算该链路的时延
+            if minimum:
+                bottleneck[3].append(minimum / GT.dataRate)
+
+    # ===== 第四阶段：可视化（可选） =====
     if plot:
-        earth.plotMap(True,True,path, bottleneck)
+        # 在地球地图上绘制完整路径及瓶颈链路信息
+        earth.plotMap(True, True, path, bottleneck)
         plt.show()
         plt.close()
 
+    # ===== 第五阶段：统计 =====
+    # 计算所有链路中的最小数据速率，作为该路径的瓶颈
     minimum = np.amin(bottleneck[1])
+    
+    # 返回瓶颈信息和最小数据速率
     return bottleneck, minimum
 
 

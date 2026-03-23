@@ -4,7 +4,7 @@ agent: 'DDQN' #
 project_name: "satNetEnv_DDQN"
 
 # environment parameters
-n_order_adj: 4 # number of order for adjacency matrix
+n_order_adj: 1 # number of order for adjacency matrix
 
 #gat parameters
 input_dim: 10

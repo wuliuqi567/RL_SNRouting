@@ -83,6 +83,7 @@ class Gateway:
         """
         Creates the processes for filling the data blocks and adding them to the send-buffer. A separate process for
         each destination gateway is created.
+        This is the "all2all" traffic mode.
         """
 
         self.totalGTs = len(GTs)
@@ -91,6 +92,23 @@ class Gateway:
             if gt != self:
                 # add a process for each destination which runs the function 'fillBlock'
                 self.fillBlocks.append(self.env.process(self.fillBlock(gt)))
+
+    def makeFillBlockProcessesFixedPairs(self, pairDefs):
+        """
+        Creates fillBlock processes only for the specified (destination, rate_bps) pairs.
+        This is used in the "fixed_pairs" and "all2all_and_fixed" traffic modes.
+
+        Parameters
+        ----------
+        pairDefs : list of (Gateway, float)
+            Each element is (destination_gateway_object, rate_in_bps).
+            Multiple entries for the same destination are allowed (rates accumulate as
+            separate independent streams).
+        """
+        for dest_gt, rate_bps in pairDefs:
+            self.fillBlocks.append(
+                self.env.process(self.fillBlockFixedRate(dest_gt, rate_bps))
+            )
 
     def fillBlock(self, destination):
         """
@@ -156,6 +174,97 @@ class Gateway:
             except simpy.Interrupt:
                 print(f'Simpy interrupt at filling block at gateway{self.name}')
                 break
+
+    def fillBlockFixedRate(self, destination, rate_bps):
+        """
+        Simpy process function  (fixed-pair traffic mode):
+
+        Similar to fillBlock(), but uses a caller-specified *rate_bps* instead of
+        deriving the flow from coverage-area user counts.  This allows arbitrary
+        point-to-point traffic patterns such as "Malaga → LA at 1 Gbps".
+
+        Parameters
+        ----------
+        destination : Gateway
+            The destination gateway.
+        rate_bps : float
+            Traffic generation rate in bits per second for this pair.
+        """
+        index = 0
+        unavailableDestinationBuffer = []
+
+        while True:
+            try:
+                block = DataBlock(
+                    self, destination,
+                    str(self.ID) + "_" + str(destination.ID) + "_fp_" + str(index),
+                    self.env.now
+                )
+
+                timeToFull = self.timeToFullBlockFixedRate(block, rate_bps)
+
+                yield self.env.timeout(timeToFull)
+
+                if block.destination.linkedSat[0] is None:
+                    unavailableDestinationBuffer.append(block)
+                else:
+                    while unavailableDestinationBuffer:
+                        if not self.sendBuffer[0][0].triggered:
+                            self.sendBuffer[0][0].succeed()
+                            self.sendBuffer[1].append(unavailableDestinationBuffer[0])
+                            unavailableDestinationBuffer.pop(0)
+                        else:
+                            newEvent = self.env.event().succeed()
+                            self.sendBuffer[0].append(newEvent)
+                            self.sendBuffer[1].append(unavailableDestinationBuffer[0])
+                            unavailableDestinationBuffer.pop(0)
+
+                    block.path = self.paths[destination.name]
+
+                    if self.earth.agent is not None:
+                        block.QPath = [block.path[0], block.path[1], block.path[len(block.path)-1]]
+
+                    if not block.path:
+                        print(self.name, destination.name)
+                        exit()
+                    block.timeAtFull = self.env.now
+                    createdBlocks.append(block)
+
+                    if not self.sendBuffer[0][0].triggered:
+                        self.sendBuffer[0][0].succeed()
+                        self.sendBuffer[1].append(block)
+                    else:
+                        newEvent = self.env.event().succeed()
+                        self.sendBuffer[0].append(newEvent)
+                        self.sendBuffer[1].append(block)
+                    index += 1
+            except simpy.Interrupt:
+                print(f'Simpy interrupt at filling block (fixed pair) at gateway {self.name}')
+                break
+
+    def timeToFullBlockFixedRate(self, block, rate_bps):
+        """
+        Calculates the time to fill a block given a fixed traffic rate (bps).
+        Uses an exponential distribution (Poisson arrival model) like the original.
+        """
+        avgTime = block.size / rate_bps
+
+        if not np.isfinite(avgTime) or avgTime <= 0:
+            avgTime = 1e-6
+
+        min_scale = 1e-6
+        max_scale = 1e8
+        scale = float(np.clip(avgTime, min_scale, max_scale))
+
+        try:
+            if hasattr(self, 'rng') and self.rng is not None:
+                sampled_time = float(self.rng.exponential(scale=scale))
+            else:
+                sampled_time = float(np.random.exponential(scale=scale))
+        except Exception:
+            sampled_time = float(scale)
+
+        return sampled_time
 
     def sendBlock(self):
         """
