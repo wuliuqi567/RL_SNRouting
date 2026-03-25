@@ -1,7 +1,7 @@
 
 # base config
 agent: 'DDQN' #
-project_name: "satNetEnv_DDQN"
+project_name: "sn_DDQN"
 
 # environment parameters
 n_order_adj: 1 # number of order for adjacency matrix

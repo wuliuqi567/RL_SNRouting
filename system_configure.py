@@ -4,7 +4,7 @@
 from pathlib import Path
 from Utils.add_flow import build_traffic_pairs
 
-GTs = [4]               # number of gateways to be tested
+GTs = [31]               # number of gateways to be tested
 # Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
 # GTs = [i for i in range(2,9)] # This is to make a sweep where scenarios with all the gateways in the range are considered
 
@@ -53,7 +53,7 @@ BLOCK_SIZE   = 64800
 # "all2all"       : (default) every GT sends traffic to every other GT, flow split evenly
 # "fixed_pairs"   : only the specified (source, destination) pairs generate traffic at the given rate (bps)
 
-trafficMode = "all2all"
+trafficMode = "fixed_pairs"
 
 # Auto-generated fixed OD flow pairs (appended to manual trafficPairs)
 extraTrafficEnabled = True
@@ -88,7 +88,7 @@ extraTrafficExcludeReverse = True
 trafficPairs = [
     ("Malaga, Spain",                  "Aalborg, Denmark",  800e6),   # 1 Gbps  Malaga → LA
     ("Los Angeles, California, US",    "Panama",            800e6),   # 800 Mbps LA → Panama
-    ("Nemea, Greece",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
+    ("Awarua, New Zealand",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
 ]
 
 if extraTrafficEnabled:

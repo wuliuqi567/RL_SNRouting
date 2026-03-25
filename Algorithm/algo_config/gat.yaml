@@ -1,7 +1,7 @@
 
 # base config
 agent: 'GAT' #
-project_name: "satNetEnv_OneHopGAT"
+project_name: "SN_GAT"
 
 # environment parameters
 n_order_adj: 1 # number of order for adjacency matrix
