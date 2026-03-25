@@ -433,6 +433,7 @@ if __name__ == '__main__':
     yaml_ruamel.indent(mapping=2, sequence=4, offset=2)
     
     config_file = "./Algorithm/algo_config/base_config.yaml"
+    outputBasePath = "./SimResults_new/"
     # test_outputPath = "SimResults/DDQN/2025-12-24/15-15-52_Starlink_3s_GTs_[2]_1adj/"
 
     with open(config_file, "r") as f:
@@ -478,10 +479,17 @@ if __name__ == '__main__':
     
     
     current_dir = os.getcwd()
+    output_root = outputBasePath if os.path.isabs(outputBasePath) else os.path.join(current_dir, outputBasePath)
     if not use_rl_model:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
         filetime_hms = datetime.now().strftime("%H-%M-%S")
-        outputPath = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}/'
+        outputPath = os.path.join(
+            output_root,
+            run_mode_name,
+            filetime_ymd,
+            f"{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}",
+            "",
+        )
         os.makedirs(outputPath, exist_ok=True)
     elif config_data["train_TA_model"]:
         filetime_ymd = datetime.now().strftime("%Y-%m-%d")
@@ -489,14 +497,25 @@ if __name__ == '__main__':
         # data_inputrl = pd.read_csv("inputRL.csv")
         # constellation = data_inputrl['Constellation'][0]
         # sim_time = data_inputrl['Test length'][0]
-        outputPath      = current_dir + f'/SimResults/{run_mode_name}/{filetime_ymd}/{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}/train/'
+        outputPath = os.path.join(
+            output_root,
+            run_mode_name,
+            filetime_ymd,
+            f"{filetime_hms}_{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}",
+            "train",
+            "",
+        )
         os.makedirs(outputPath, exist_ok=True)
     else:
         mode_load_dir = config_data.get('mode_load_dir', None)
+        if not mode_load_dir:
+            raise ValueError("`mode_load_dir` is required when `train_TA_model` is false.")
+
+        mode_load_root = mode_load_dir if os.path.isabs(mode_load_dir) else os.path.join(current_dir, mode_load_dir)
         if config_data['use_student_network']:
-            outputPath = os.path.join(current_dir, mode_load_dir + f'test_student_network_avUserLoad{avUserLoad}/')
+            outputPath = os.path.join(mode_load_root, f'test_student_network_avUserLoad{avUserLoad}', "")
         else:
-            outputPath = os.path.join(current_dir, mode_load_dir + f'test_teacher_network_avUserLoad{avUserLoad}/')
+            outputPath = os.path.join(mode_load_root, f'test_teacher_network_avUserLoad{avUserLoad}', "")
         if not os.path.exists(outputPath):
             os.makedirs(outputPath)
     setup_logging(outputPath)

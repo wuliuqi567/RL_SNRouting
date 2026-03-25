@@ -57,7 +57,7 @@ trafficMode = "all2all"
 
 # Auto-generated fixed OD flow pairs (appended to manual trafficPairs)
 extraTrafficEnabled = True
-extraTrafficPairCount = 10
+extraTrafficPairCount = 5
 extraTrafficTotalMbps = 50.0
 # default: fixed non-random reproducible 10-pair list
 # options: "fixed" | "random"
