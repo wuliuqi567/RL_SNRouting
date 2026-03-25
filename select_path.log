@@ -245,3 +245,418 @@
     路径2: Los Angeles, California, US -> Jan Mayen, Norway
     路径3: Inuvik, Northwest Territories, Canada -> Svalbard, Norway
     共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+正在加载路径数据: /home/qwer/Desktop/RL_SNRouting/AllPairsPaths/all_pairs_paths.csv
+共加载 465 条可达路径
+
+
+================================================================================
+  功能1: 两条路径（源目都不同）共享中间节点数量的统计分布
+================================================================================
+满足源目都不同的路径对总数: 94395
+
+        共享中间节点数 |      路径对数量 |       占比
+---------------------------------------------
+              0 |      71875 |   76.14%
+              1 |       4496 |    4.76%
+              2 |       1898 |    2.01%
+              3 |       2043 |    2.16%
+              4 |       2132 |    2.26%
+              5 |        906 |    0.96%
+              6 |       1111 |    1.18%
+              7 |        475 |    0.50%
+              8 |        812 |    0.86%
+              9 |       1059 |    1.12%
+             10 |        491 |    0.52%
+             11 |        606 |    0.64%
+             12 |        783 |    0.83%
+             13 |        792 |    0.84%
+             14 |        508 |    0.54%
+             15 |        623 |    0.66%
+             16 |        430 |    0.46%
+             17 |        361 |    0.38%
+             18 |        488 |    0.52%
+             19 |         65 |    0.07%
+             20 |        276 |    0.29%
+             21 |        417 |    0.44%
+             22 |        134 |    0.14%
+             23 |        294 |    0.31%
+             24 |        183 |    0.19%
+             25 |        197 |    0.21%
+             26 |        156 |    0.17%
+             27 |         78 |    0.08%
+             28 |        159 |    0.17%
+             29 |        147 |    0.16%
+             30 |        110 |    0.12%
+             31 |         98 |    0.10%
+             32 |         58 |    0.06%
+             33 |         55 |    0.06%
+             34 |         23 |    0.02%
+             35 |         30 |    0.03%
+             36 |          9 |    0.01%
+             37 |          8 |    0.01%
+             38 |          7 |    0.01%
+             39 |          2 |    0.00%
+
+================================================================================
+  功能1: 两条路径共享恰好 n 个中间节点的示例 (n=1,2,3)
+================================================================================
+
+--- 共享恰好 2 个中间节点的路径对 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Bangalore, India (partner station) -> Mauritius (hops=45)
+    共享中间节点 (2个): ['55_0', '56_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Bangalore, India (partner station) -> Svalbard, Norway (hops=8)
+    共享中间节点 (2个): ['55_0', '56_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Bangalore, India (partner station) -> Vardø, Norway (hops=11)
+    共享中间节点 (2个): ['55_0', '56_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Panama (hops=45)
+    共享中间节点 (2个): ['55_0', '56_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Nemea, Greece -> Bangalore, India (partner station) (hops=21)
+    共享中间节点 (2个): ['55_0', '56_0']
+
+--- 共享恰好 3 个中间节点的路径对 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Cordoba, Argentina (partner station) (hops=37)
+    路径2: Tolhuin, Argentina (partner station) -> Maspalomas, Canary Islands, Spain (hops=24)
+    共享中间节点 (3个): ['63_11', '64_11', '65_11']
+
+  示例 2:
+    路径1: Malaga, Spain -> Cordoba, Argentina (partner station) (hops=37)
+    路径2: Awarua, New Zealand -> Panama (hops=11)
+    共享中间节点 (3个): ['55_11', '56_11', '57_11']
+
+  示例 3:
+    路径1: Malaga, Spain -> Cordoba, Argentina (partner station) (hops=37)
+    路径2: Nuuk, Greenland -> Punta Arenas, Chile (hops=45)
+    共享中间节点 (3个): ['63_11', '64_11', '65_11']
+
+  示例 4:
+    路径1: Malaga, Spain -> Cordoba, Argentina (partner station) (hops=37)
+    路径2: Maspalomas, Canary Islands, Spain -> Antarctica (TrollSat) (hops=38)
+    共享中间节点 (3个): ['63_11', '64_11', '65_11']
+
+  示例 5:
+    路径1: Malaga, Spain -> Cordoba, Argentina (partner station) (hops=37)
+    路径2: Maspalomas, Canary Islands, Spain -> Punta Arenas, Chile (hops=23)
+    共享中间节点 (3个): ['63_11', '64_11', '65_11']
+
+--- 共享恰好 4 个中间节点的路径对 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Inuvik, Northwest Territories, Canada -> Puertollano, Spain (hops=21)
+    共享中间节点 (4个): ['41_0', '42_0', '43_0', '44_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Nuuk, Greenland -> Tokyo, Japan (hops=27)
+    共享中间节点 (4个): ['41_0', '42_0', '43_0', '44_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Nuuk, Greenland -> Mauritius (hops=38)
+    共享中间节点 (4个): ['41_0', '42_0', '43_0', '44_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Nuuk, Greenland (hops=31)
+    共享中间节点 (4个): ['41_0', '42_0', '43_0', '44_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Inuvik, Northwest Territories, Canada -> Nuuk, Greenland (hops=19)
+    共享中间节点 (4个): ['41_0', '42_0', '43_0', '44_0']
+
+--- 共享恰好 5 个中间节点的路径对 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Tolhuin, Argentina (partner station) -> Jan Mayen, Norway (hops=38)
+    共享中间节点 (5个): ['52_0', '53_0', '54_0', '55_0', '56_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Cordoba, Argentina (partner station) -> Jan Mayen, Norway (hops=23)
+    共享中间节点 (5个): ['52_0', '53_0', '54_0', '55_0', '56_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Nemea, Greece -> Jan Mayen, Norway (hops=20)
+    共享中间节点 (5个): ['52_0', '53_0', '54_0', '55_0', '56_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Awarua, New Zealand -> Jan Mayen, Norway (hops=17)
+    共享中间节点 (5个): ['52_0', '53_0', '54_0', '55_0', '56_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Mauritius -> Jan Mayen, Norway (hops=44)
+    共享中间节点 (5个): ['52_0', '53_0', '54_0', '55_0', '56_0']
+
+================================================================================
+  功能2: 三条路径（源目都不同）共享中间节点的示例
+================================================================================
+
+--- 三条路径共享至少 2 个中间节点 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Puertollano, Spain (hops=33)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Vardø, Norway (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Tromsø, Norway (TNOC) (hops=33)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Svalbard, Norway (hops=32)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Tolhuin, Argentina (partner station) -> Nuuk, Greenland (hops=46)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 6:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Nuuk, Greenland (hops=31)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 7:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Azores, Portugal (partner station) (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 8:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Bangalore, India (partner station) (hops=34)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 9:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Awarua, New Zealand (hops=42)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 10:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Panama (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+--- 三条路径共享至少 3 个中间节点 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Panama (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Awarua, New Zealand (hops=42)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Tolhuin, Argentina (partner station) -> Nuuk, Greenland (hops=46)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Tromsø, Norway (TNOC) (hops=33)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Bangalore, India (partner station) (hops=34)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 6:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Puertollano, Spain (hops=33)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 7:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Svalbard, Norway (hops=32)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 8:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Vardø, Norway (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 9:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Nuuk, Greenland (hops=31)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 10:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Azores, Portugal (partner station) (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+--- 三条路径共享至少 4 个中间节点 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Vardø, Norway (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Nuuk, Greenland (hops=31)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Awarua, New Zealand (hops=42)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Azores, Portugal (partner station) (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Svalbard, Norway (hops=32)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 6:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Puertollano, Spain (hops=33)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 7:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Tolhuin, Argentina (partner station) -> Nuuk, Greenland (hops=46)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 8:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Bangalore, India (partner station) (hops=34)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 9:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Tromsø, Norway (TNOC) (hops=33)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 10:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Panama (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+--- 三条路径共享至少 5 个中间节点 ---
+
+  示例 1:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Bangalore, India (partner station) (hops=34)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 2:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Tromsø, Norway (TNOC) (hops=33)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 3:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Awarua, New Zealand (hops=42)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 4:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Nuuk, Greenland (hops=31)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 5:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Tolhuin, Argentina (partner station) -> Nuuk, Greenland (hops=46)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 6:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Svalbard, Norway (hops=32)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 7:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Panama (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 8:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Cordoba, Argentina (partner station) -> Puertollano, Spain (hops=33)
+    共享中间节点 (9个): ['44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 9:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Azores, Portugal (partner station) (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']
+
+  示例 10:
+    路径1: Malaga, Spain -> Aalborg, Denmark (hops=20)
+    路径2: Los Angeles, California, US -> Jan Mayen, Norway (hops=39)
+    路径3: Inuvik, Northwest Territories, Canada -> Vardø, Norway (hops=35)
+    共享中间节点 (12个): ['41_0', '42_0', '43_0', '44_0', '45_0', '46_0', '47_0', '48_0', '49_0', '50_0', '51_0', '52_0']

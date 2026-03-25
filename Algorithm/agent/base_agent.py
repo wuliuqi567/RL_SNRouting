@@ -343,7 +343,8 @@ class BaseAgent(ABC):
         minEps = self.config.MIN_EPSILON
         decayRate = self.config.decayRate
         LAMBDA = self.config.LAMBDA
-        epsilon = minEps + (maxEps - minEps) * math.exp(-LAMBDA * step / (decayRate * (2**2)))
+        power = getattr(self.config, 'power', 2)
+        epsilon = minEps + (maxEps - minEps) * math.exp(-LAMBDA * step / (decayRate * (power**2)))
         self.epsilon.append([epsilon, sat.env.now])
         return epsilon
 

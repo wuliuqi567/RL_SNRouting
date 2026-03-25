@@ -6,6 +6,8 @@
 
 import csv
 import os
+import random
+import argparse
 from itertools import combinations
 from collections import defaultdict
 
@@ -58,6 +60,8 @@ def find_two_paths_with_n_common_nodes(paths, n_values=(1, 2, 3)):
             results[num_common].append({
                 'path1': f"{p1['source']} -> {p1['destination']}",
                 'path2': f"{p2['source']} -> {p2['destination']}",
+                'path1_hops': p1['hops'],
+                'path2_hops': p2['hops'],
                 'common_nodes': sorted(common),
                 'num_common': num_common
             })
@@ -133,6 +137,9 @@ def find_three_paths_with_common_nodes(paths, min_common=1, max_examples=5):
                     'path1': f"{p1['source']} -> {p1['destination']}",
                     'path2': f"{p2['source']} -> {p2['destination']}",
                     'path3': f"{p3['source']} -> {p3['destination']}",
+                    'path1_hops': p1['hops'],
+                    'path2_hops': p2['hops'],
+                    'path3_hops': p3['hops'],
                     'common_nodes': sorted(common),
                     'num_common': len(common)
                 })
@@ -148,7 +155,21 @@ def print_separator(title):
     print("=" * 80)
 
 
-def main():
+def parse_args():
+    parser = argparse.ArgumentParser(description="路径分析与共享中间节点示例输出")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=1,
+        help="随机种子（用于打乱示例输出顺序）。不传则每次顺序可能不同。",
+    )
+    return parser.parse_args()
+
+
+def main(seed=None):
+    if seed is not None:
+        random.seed(seed)
+
     csv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                             'AllPairsPaths/all_pairs_paths.csv')
     print(f"正在加载路径数据: {csv_path}")
@@ -172,14 +193,15 @@ def main():
 
     for n in (2, 3, 4, 5):
         print(f"\n--- 共享恰好 {n} 个中间节点的路径对 ---")
-        examples = two_path_results[n]
+        examples = list(two_path_results[n])
+        random.shuffle(examples)
         if not examples:
             print("  未找到符合条件的路径对")
             continue
         for idx, ex in enumerate(examples, 1):
             print(f"\n  示例 {idx}:")
-            print(f"    路径1: {ex['path1']}")
-            print(f"    路径2: {ex['path2']}")
+            print(f"    路径1: {ex['path1']} (hops={ex['path1_hops']})")
+            print(f"    路径2: {ex['path2']} (hops={ex['path2_hops']})")
             print(f"    共享中间节点 ({ex['num_common']}个): {ex['common_nodes']}")
 
     # ========== 功能2: 三条路径共享中间节点 ==========
@@ -188,18 +210,20 @@ def main():
     for min_common in (2, 3, 4, 5):
         print(f"\n--- 三条路径共享至少 {min_common} 个中间节点 ---")
         three_path_results = find_three_paths_with_common_nodes(
-            paths, min_common=min_common, max_examples=3
+            paths, min_common=min_common, max_examples=10
         )
+        random.shuffle(three_path_results)
         if not three_path_results:
             print("  未找到符合条件的路径组合")
             continue
         for idx, ex in enumerate(three_path_results, 1):
             print(f"\n  示例 {idx}:")
-            print(f"    路径1: {ex['path1']}")
-            print(f"    路径2: {ex['path2']}")
-            print(f"    路径3: {ex['path3']}")
+            print(f"    路径1: {ex['path1']} (hops={ex['path1_hops']})")
+            print(f"    路径2: {ex['path2']} (hops={ex['path2_hops']})")
+            print(f"    路径3: {ex['path3']} (hops={ex['path3_hops']})")
             print(f"    共享中间节点 ({ex['num_common']}个): {ex['common_nodes']}")
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+    main(seed=args.seed)

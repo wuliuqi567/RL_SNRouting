@@ -1,6 +1,8 @@
 # =============================================================================
 # 1. Simulation & Pathing Configuration
 # =============================================================================
+from pathlib import Path
+from Utils.add_flow import build_traffic_pairs
 
 GTs = [4]               # number of gateways to be tested
 # Gateways are taken from https://www.ksat.no/ground-network-services/the-ksat-global-ground-station-network/ (Except for Malaga and Aalborg)
@@ -53,6 +55,28 @@ BLOCK_SIZE   = 64800
 
 trafficMode = "all2all"
 
+# Auto-generated fixed OD flow pairs (appended to manual trafficPairs)
+extraTrafficEnabled = True
+extraTrafficPairCount = 10
+extraTrafficTotalMbps = 50.0
+# default: fixed non-random reproducible 10-pair list
+# options: "fixed" | "random"
+extraTrafficSelectionMode = "fixed"
+extraTrafficSeed = 42
+
+# Fixed excluded OD pairs for auto-generation.
+# Supports directed pairs; by default reverse direction is also excluded.
+extraTrafficExcludedPairs = [
+    # ("Malaga, Spain", "Aalborg, Denmark"),
+]
+
+# If True, generated pairs do not reuse endpoints already present in manual trafficPairs.
+extraTrafficExcludeExistingNodes = True
+# If True, generated pairs avoid manual/excluded pairs themselves.
+extraTrafficExcludeExistingPairs = True
+# If True, excluding (A,B) also excludes (B,A).
+extraTrafficExcludeReverse = True
+
 # Fixed-pair traffic definitions (used when trafficMode is "fixed_pairs" or "all2all_and_fixed")
 # Each entry: (source_GT_name, destination_GT_name, rate_bps)
 # GT names must match the 'Location' column in Gateways.csv exactly.
@@ -64,7 +88,22 @@ trafficMode = "all2all"
 trafficPairs = [
     ("Malaga, Spain",                  "Aalborg, Denmark",  800e6),   # 1 Gbps  Malaga → LA
     ("Los Angeles, California, US",    "Panama",            800e6),   # 800 Mbps LA → Panama
+    ("Nemea, Greece",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
 ]
+
+if extraTrafficEnabled:
+    trafficPairs = build_traffic_pairs(
+        base_pairs=trafficPairs,
+        gateway_csv_path=Path(__file__).with_name("Gateways.csv"),
+        generated_pair_count=extraTrafficPairCount,
+        generated_total_flow_mbps=extraTrafficTotalMbps,
+        selection_mode=extraTrafficSelectionMode,
+        excluded_pairs=extraTrafficExcludedPairs,
+        exclude_reverse_pairs=extraTrafficExcludeReverse,
+        exclude_existing_pairs=extraTrafficExcludeExistingPairs,
+        exclude_existing_nodes=extraTrafficExcludeExistingNodes,
+        seed=extraTrafficSeed,
+    )
 
 # =============================================================================
 # 4. Movement & Constellation
