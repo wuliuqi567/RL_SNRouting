@@ -165,8 +165,8 @@ class MHGNNEDGEAgent(BaseAgent):
             info = self.learner.update(samples, self.step)
             self.log_infos_no_index(info)
 
-        earth.loss.append([info.get('rl_loss', 0.0), sat.env.now])
-        earth.trains.append([sat.env.now])
+        # earth.loss.append([info.get('rl_loss', 0.0), sat.env.now])
+        # earth.trains.append([sat.env.now])
         
 
     def store_experience(self, block, reward, new_state, is_terminal, sat, earth, recalculate_flag=False):

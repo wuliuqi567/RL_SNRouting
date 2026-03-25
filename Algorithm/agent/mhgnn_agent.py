@@ -244,8 +244,8 @@ class MHGNNAgent(BaseAgent):
         minEps = self.config.MIN_EPSILON
         decayRate = self.config.decayRate
         LAMBDA = self.config.LAMBDA
-        CurrentGTnumber = self.config.CurrentGTnumber
-        epsilon = minEps + (maxEps - minEps) * math.exp(-LAMBDA * step / (decayRate * (CurrentGTnumber**2)))
+        # CurrentGTnumber = self.config.CurrentGTnumber
+        epsilon = minEps + (maxEps - minEps) * math.exp(-LAMBDA * step / (decayRate * (2**2)))
         self.epsilon.append([epsilon, sat.env.now])
         return epsilon
     

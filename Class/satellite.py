@@ -356,8 +356,10 @@ class Satellite:
                         sendBuffer = _find_send_buffer_for(next_id)
 
             if sendBuffer is not None:
-                # ANCHOR save the queue length that the block found at its next hop
-                self.orbPlane.earth.queues.append(len(sendBuffer[1]))
+                # ANCHOR legacy queue histogram logging (disabled by default to save memory)
+                # self.orbPlane.earth.queues.append(len(sendBuffer[1]))
+                if enableQueueHistogram:
+                    self.orbPlane.earth.queues.append(len(sendBuffer[1]))
                 block.queue.append(len(sendBuffer[1]))
 
                 # add block to buffer

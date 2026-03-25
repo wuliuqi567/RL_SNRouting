@@ -20,5 +20,5 @@ train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
 mode_load_dir: "SimResults/MPNN/best_model/20-57-38_Starlink_3s_GTs_[2]/"
-outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/MHGNN/2026-03-23/22-05-55_Starlink_3s_GTs_[31]_fp2_t1.80G_MS2AD1000M_LACU2P800M/train/'
+outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults/MHGNN/2026-03-25/09-59-20_Starlink_3s_GTs_[31]_fp2_t1.60G_MS2AD800M_LACU2P800M/train/'
 CurrentGTnumber: 31

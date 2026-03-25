@@ -337,8 +337,11 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
             # save & plot all paths latencies
             logger.info('Plotting latencies...')
             plotSaveAllLatencies(outputPath, GTnumber, allLatencies)
-            logger.info('plot queun length')
-            plotQueues(earth1.queues, outputPath, GTnumber)
+            # logger.info('plot queun length')
+            # plotQueues(earth1.queues, outputPath, GTnumber)
+            if enableQueueHistogram:
+                logger.info('Plotting queue histogram (legacy)...')
+                plotQueues(earth1.queues, outputPath, GTnumber)
             
         # 保存最大队列统计
         if earth1.max_queue_stats:
@@ -372,6 +375,7 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         upGSLRates          .clear()
         downGSLRates        .clear()
         interRates          .clear()
+        dropBlocks         .clear()
         intraRate           .clear()
         del results
         del earth1

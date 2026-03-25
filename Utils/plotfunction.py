@@ -3,7 +3,7 @@ import numpy as np
 import logging
 from system_configure import *
 from globalvar import *
-from Class.auxiliaryClass import Results, BlocksForPickle
+from Class.auxiliaryClass import Results
 import os
 import pickle
 import pandas as pd
@@ -85,40 +85,45 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     '''
     General Block transmission stats
     '''
-    allTransmissionTimes = []    # list of all the transmission times of the blocks
-    largestTransmissionTime = (0, None) # (Transmission time, Block) of the largest transmission time
-    mostHops = (0, None) # (Number of hops, Block) of the block with most hops
-    queueLat = [] # list of all the queue latencies of the blocks
-    txLat = [] # lisr of 
-    propLat = [] 
-    # latencies = [queueLat, txLat, propLat]
-    blocks = [] # 
-    allLatencies= []
-    pathBlocks  = [[],[]]
+    totalTime = 0.0
+    queue_sum = 0.0
+    tx_sum = 0.0
+    prop_sum = 0.0
+    block_count = 0
+
+    allLatencies = []
+    pathBlocks = [[], []]
     first       = earth.gateways[0]
     second      = earth.gateways[1]
 
+    # Reuse existing received block objects instead of building a duplicated wrapper list.
+    # This avoids an additional O(n) memory footprint inside this function.
+    blocks = receivedDataBlocks
+
     # earth.pathParam
 
-    for block in receivedDataBlocks: # 
+    for block in receivedDataBlocks:
         time = block.getTotalTransmissionTime()
-        hops = len(block.checkPoints)
-        blocks.append(BlocksForPickle(block))
+        queue_time = block.getQueueTime()[0]
 
-        if largestTransmissionTime[0] < time:
-            largestTransmissionTime = (time, block)
-
-        if mostHops[0] < hops:
-            mostHops = (hops, block)
-
-        allTransmissionTimes.append(time)
-
-        queueLat.append(block.getQueueTime()[0])
-        txLat.append(block.txLatency)
-        propLat.append(block.propLatency)
+        totalTime += time
+        queue_sum += queue_time
+        tx_sum += block.txLatency
+        prop_sum += block.propLatency
+        block_count += 1
         
         # [creation time, total latency, arrival time, source, destination, block ID, queue time, transmission latency, prop latency]
-        allLatencies.append([block.creationTime, block.totLatency, block.creationTime+block.totLatency, block.source.name, block.destination.name, block.ID, block.getQueueTime()[0], block.txLatency, block.propLatency])
+        allLatencies.append([
+            block.creationTime,
+            block.totLatency,
+            block.creationTime + block.totLatency,
+            block.source.name,
+            block.destination.name,
+            block.ID,
+            queue_time,
+            block.txLatency,
+            block.propLatency,
+        ])
         # pre-process the received data blocks. create the rows that will be saved in csv
         if block.source == first and block.destination == second:
             pathBlocks[0].append([block.totLatency, block.creationTime+block.totLatency])
@@ -135,16 +140,15 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     # except pickle.PicklingError:
     #     print('Error with pickle and profiling')
 
-    avgTime = np.mean(allTransmissionTimes)
-    totalTime = sum(allTransmissionTimes)
+    avgTime = float(totalTime / block_count) if block_count > 0 else 0.0
     created_blocks = len(createdBlocks)
     received_blocks = len(receivedDataBlocks)
     stuck_blocks = created_blocks - received_blocks - len(dropBlocks)
 
     if totalTime > 0:
-        queue_pct = float(sum(queueLat) / totalTime * 100)
-        tx_pct = float(sum(txLat) / totalTime * 100)
-        prop_pct = float(sum(propLat) / totalTime * 100)
+        queue_pct = float(queue_sum / totalTime * 100)
+        tx_pct = float(tx_sum / totalTime * 100)
+        prop_pct = float(prop_sum / totalTime * 100)
     else:
         queue_pct = 0.0
         tx_pct = 0.0
@@ -195,9 +199,9 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
                       constellation=constellationType,
                       GTs=GTs,
                       meanTotalLatency=avgTime,
-                      meanQueueLatency=np.mean(queueLat),
-                      meanPropLatency=np.mean(propLat),
-                      meanTransLatency=np.mean(txLat),
+                      meanQueueLatency=(queue_sum / block_count if block_count > 0 else 0.0),
+                      meanPropLatency=(prop_sum / block_count if block_count > 0 else 0.0),
+                      meanTransLatency=(tx_sum / block_count if block_count > 0 else 0.0),
                       perQueueLatency = queue_pct,
                       perPropLatency = prop_pct,
                       perTransLatency = tx_pct)
@@ -238,15 +242,36 @@ def plotSavePathLatencies(outputPath, GTnumber, pathBlocks):
 
 def plot_packet_latencies_and_uplink_downlink_throughput(data, outputPath, bins_num=30, save=False, plot_separately=True):
     """
-    Generate either separate scatter plots of packet latencies for each path (source-destination),
-    or a single plot combining all paths. Overlay line plots of uplink and downlink throughput on 
-    a secondary y-axis, with a single legend for all items in the upper right.
+     生成“时延散点 + 吞吐量曲线”的联合图。
+
+     图的构成：
+     1) 主 y 轴（ax1）：包到达时延散点图
+         - x: 包到达时刻（arrival_time）
+         - y: 端到端时延（totLatency）
+     2) 次 y 轴（ax2）：上/下行吞吐量折线
+         - 上行吞吐量：按 creation_time 统计每个时间分箱内的包数
+         - 下行吞吐量：按 arrival_time 统计每个时间分箱内的包数
+         - 吞吐量计算：throughput = (counts * BLOCK_SIZE / 1e3) / bin_width
+
+     参数：
+     - data: 可迭代 block 对象，要求至少包含
+        - block.path（用于提取源/宿）
+        - block.creationTime
+        - block.totLatency
+     - outputPath: 输出目录
+     - bins_num: 时间分箱数量（越大曲线越细，越容易抖动）
+     - save: True 时保存到 outputPath/Throughput；False 时直接显示
+     - plot_separately: True 按 (src, dst) 分路由作图；False 合并所有路由
+
+     注意：
+     - 当前实现保持历史口径，吞吐量单位标注为 Mbps，且使用 /1e3 的换算。
+     - 若你希望严格按 bit/s->Mbit/s，可改为 /1e6（会改变数值尺度）。
     """
 
     save_dir = os.path.join(outputPath, 'Throughput')
     os.makedirs(save_dir, exist_ok=True)
 
-    # Group blocks by (source, destination) paths
+    # 按 (源网关, 目的网关) 分组，便于按路径分别绘图
     paths_data = defaultdict(list)
     for block in data:
         src = block.path[0][0]        # Source
@@ -257,10 +282,10 @@ def plot_packet_latencies_and_uplink_downlink_throughput(data, outputPath, bins_
     def plot_path_data(blocks, src=None, dst=None):
         fig, ax1 = plt.subplots(figsize=(8, 4))
         
-        # Sort blocks by creation time
+        # 先按创建时间排序，保证时间轴递增
         blocks = sorted(blocks, key=lambda b: b.creationTime)
         
-        # Extract times and latencies (converted to ms)
+        # 提取时序数据并统一转换为 ms
         creation_times = np.array([block.creationTime for block in blocks]) * 1000  # ms
         arrival_times = np.array([block.creationTime + block.totLatency for block in blocks]) * 1000  # ms
         latencies = np.array([block.totLatency * 1000 for block in blocks])  # ms
@@ -272,17 +297,23 @@ def plot_packet_latencies_and_uplink_downlink_throughput(data, outputPath, bins_
         ax1.set_xlabel('Time [ms]', fontsize=16)
         ax1.set_ylabel('Average E2E Latency [ms]', fontsize=16)
         
-        # Create secondary y-axis for throughput
+        # 在副轴绘制吞吐量曲线（与时延共享 x 轴）
         ax2 = ax1.twinx()
+
+        # 在 [最早创建时刻, 最晚到达时刻] 范围内等距划分时间箱
+        # 每个箱子对应一个“局部吞吐量估计”
         time_bins = np.linspace(min(creation_times), max(arrival_times), num=bins_num)
         
-        # Calculate throughput
+        # 上行吞吐量：统计 creation_time 在每个 bin 的包数
         uplink_counts, _ = np.histogram(creation_times, bins=time_bins)
+        # 下行吞吐量：统计 arrival_time 在每个 bin 的包数
+        # 公式核心：throughput = (包数 * 包大小) / 时间窗宽
+        # np.diff(time_bins) 是每个时间窗宽度（ms）
         uplink_throughput = (uplink_counts * BLOCK_SIZE / 1e3) / np.diff(time_bins)  # Mbps
         downlink_counts, _ = np.histogram(arrival_times, bins=time_bins)
         downlink_throughput = (downlink_counts * BLOCK_SIZE / 1e3) / np.diff(time_bins)  # Mbps
 
-        # Plot throughput on secondary y-axis
+        # x 轴使用每个 bin 的左边界（time_bins[:-1]）来画吞吐量曲线
         uplink_line, = ax2.plot(time_bins[:-1], uplink_throughput, color='#00008B', lw=2, label='Uplink Throughput')
         downlink_line, = ax2.plot(time_bins[:-1], downlink_throughput, color='#1E90FF', lw=2, label='Downlink Throughput')
         
@@ -307,7 +338,7 @@ def plot_packet_latencies_and_uplink_downlink_throughput(data, outputPath, bins_
             plt.show()
         plt.close()
 
-    # Plot all paths together or separately based on flag
+    # 根据配置选择：按路径分别绘图，或合并全部路径绘图
     if plot_separately:
         for (src, dst), blocks in paths_data.items():
             plot_path_data(blocks, src, dst)

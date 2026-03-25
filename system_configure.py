@@ -62,7 +62,7 @@ trafficMode = "fixed_pairs"
 #       ("Los Angeles, California, US",    "Malaga, Spain",                500e6), # 500 Mbps LA → Malaga
 #   ]
 trafficPairs = [
-    ("Malaga, Spain",                  "Aalborg, Denmark",  1e9),   # 1 Gbps  Malaga → LA
+    ("Malaga, Spain",                  "Aalborg, Denmark",  800e6),   # 1 Gbps  Malaga → LA
     ("Los Angeles, California, US",    "Panama",            800e6),   # 800 Mbps LA → Panama
 ]
 
@@ -89,6 +89,7 @@ firstMove   = True      # The biggest slant range is only computed the first tim
 plotAllThro = True      # If True, it plots throughput plots for each single path between gateways. If False, it plots a single figure for overall Throughput
 winSize     = 20        # window size for the representation in the plots
 markerSize  = 50        # Size of the markers in the plots
+enableQueueHistogram = False  # Queue histogram logging switch (legacy): if True, collect earth.queues and plot Queues_*.csv/png at end
 
 # =============================================================================
 # 5. State Representation
