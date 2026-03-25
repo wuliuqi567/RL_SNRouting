@@ -1,3 +1,58 @@
+# run program
+
+代码运行指令
+终端无输出模式
+
+```bash
+python simrl.py > /dev/null 2>&1 & 
+```
+
+
+- 最短路径
+  
+  ```bash
+  #修改base_config.yaml中
+  use_rl_model: false 
+  
+  # system_configure.py中
+  GTs = [4] # 确保几个网关数量
+  
+  trafficMode = "all2all" # 流量模式，当选择all2all时候需要对应修改avUserLoad
+  avUserLoad  = 28 # 流量负载
+  trafficMode = "fixed_pairs" # 流量模式，当选择fixed_pairs时候需要 添加 trafficPairs
+  ```
+
+- RL算法
+  
+  ```bash
+  #修改base_config.yaml中
+  use_rl_model: true
+  
+  #选择模型
+  agent: 'MHGNN' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
+
+  # training parameters 设置
+  train_TA_model: true # whether to train the teacher agent network
+  use_student_network: false # whether to use the student network for action selection
+
+  当训练模式时候，再子yaml文件中明确 项目名称
+  project_name: "satNetEnv_MHGNN_fixedGTsPairs_v1"
+
+  当测试模式时候
+  train_TA_model: false # whether to train the teacher agent network
+  use_student_network: false # whether to use the student network for action selection 只有在MHGNN下生效，其他算法没有
+  需要配置模型的地址，
+  mode_load_dir: "SimResults/MPNN/best_model/20-57-38_Starlink_3s_GTs_[2]/"
+
+
+  # system_configure.py中
+  GTs = [4] # 确保几个网关数量
+  
+  trafficMode = "all2all" # 流量模式，当选择all2all时候需要对应修改avUserLoad
+  avUserLoad  = 28 # 流量负载
+  trafficMode = "fixed_pairs" # 流量模式，当选择fixed_pairs时候需要 添加 trafficPairs
+  ```
+
 # Run Config Notes
 
 ## Queue histogram switch (memory related)
