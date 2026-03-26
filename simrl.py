@@ -516,10 +516,11 @@ if __name__ == '__main__':
             raise ValueError("`mode_load_dir` is required when `train_TA_model` is false.")
 
         mode_load_root = mode_load_dir if os.path.isabs(mode_load_dir) else os.path.join(current_dir, mode_load_dir)
+        test_suffix = f"{Constellation}_{Test_length}s_GTs_{GTs}{load_suffix}{traffic_suffix}"
         if config_data['use_student_network']:
-            outputPath = os.path.join(mode_load_root, f'test_student_network_avUserLoad{avUserLoad}', "")
+            outputPath = os.path.join(mode_load_root, f'test_student_network_{test_suffix}', "")
         else:
-            outputPath = os.path.join(mode_load_root, f'test_teacher_network_avUserLoad{avUserLoad}', "")
+            outputPath = os.path.join(mode_load_root, f'test_teacher_network_{test_suffix}', "")
         if not os.path.exists(outputPath):
             os.makedirs(outputPath)
     setup_logging(outputPath)

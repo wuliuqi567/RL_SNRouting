@@ -14,6 +14,64 @@ python simrl.py
 python simrl.py > /dev/null 2>&1 &
 ```
 
+批量流量扫描运行（`intergrated_test/SP-test.py`）：
+
+```bash
+python intergrated_test/SP-test.py
+```
+
+自定义流量范围（从 500e6 开始，每次 +25e6 到 800e6）：
+
+```bash
+python intergrated_test/SP-test.py --start-flow 500e6 --end-flow 800e6 --step-flow 25e6
+```
+
+说明：
+
+- 该脚本会临时修改 `system_configure.py` 中 `trafficPairs` 的 rate，并对每个 flow 运行一次 `simrl.py`。
+- 默认会在扫描结束后自动恢复 `system_configure.py` 原内容。
+- 若希望保留最后一次写入的流量配置，可加参数：`--no-restore-config`。
+
+批量结果汇总（按 `blockInfo.csv`，并附带目录名提取的流量强度）：
+
+```bash
+python intergrated_test/collect-sp-flow-data.py \
+    --base-dir SimResults_new/ShortestPath/2026-03-26 \
+    --sort-by flow_total_gbps
+```
+
+可选参数：
+
+- `--desc`：按指定字段降序排序。
+- `--output-name blockInfo_merged.csv`：自定义输出文件名（默认即此名）。
+
+MHGNN 集成测试（并行扫流量）：
+
+```bash
+python intergrated_test/MHGNN-test.py --start-flow 700e6 --end-flow 1000e6 --step-flow 100e6 --workers 3 --clean-runtime-dir
+```
+
+可选参数：
+
+- `--workers`：并行任务数。
+- `--runtime-dir`：并行隔离工作目录（默认 `intergrated_test/.mhgnn_parallel_runs`）。
+- `--python-exec`：指定运行 `simrl.py` 的 Python 解释器。
+
+完整流程（推荐顺序）：
+
+```bash
+# 1) 批量运行不同 flow 的 shortest-path 仿真
+python intergrated_test/SP-test.py --start-flow 600e6 --end-flow 1000e6 --step-flow 25e6
+
+# 1.1) （可选）MHGNN 模型并行集成测试
+python intergrated_test/MHGNN-test.py --start-flow 600e6 --end-flow 1000e6 --step-flow 25e6 --workers 3 --clean-runtime-dir
+
+# 2) 汇总该日期目录下每次运行的 blockInfo.csv
+python intergrated_test/collect-sp-flow-data.py \
+    --base-dir SimResults_new/ShortestPath/2026-03-26 \
+    --sort-by flow_total_gbps
+```
+
 ---
 
 ## 2) 最短路径模式（不启用 RL）

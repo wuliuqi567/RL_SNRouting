@@ -36,3 +36,7 @@ playground.ipynb
 .vscode
 .python-version
 __pychache__
+/intergrated_test/__pychache__
+__pycache__/
+*.py[cod]
+/intergrated_test/.mhgnn_parallel_runs/

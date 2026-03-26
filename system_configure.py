@@ -56,7 +56,7 @@ BLOCK_SIZE   = 64800
 trafficMode = "fixed_pairs"
 
 # Auto-generated fixed OD flow pairs (appended to manual trafficPairs)
-extraTrafficEnabled = True
+extraTrafficEnabled = False
 extraTrafficPairCount = 5
 extraTrafficTotalMbps = 50.0
 # default: fixed non-random reproducible 10-pair list
@@ -86,9 +86,9 @@ extraTrafficExcludeReverse = True
 #       ("Los Angeles, California, US",    "Malaga, Spain",                500e6), # 500 Mbps LA → Malaga
 #   ]
 trafficPairs = [
-    ("Malaga, Spain",                  "Aalborg, Denmark",  800e6),   # 1 Gbps  Malaga → LA
-    ("Los Angeles, California, US",    "Panama",            800e6),   # 800 Mbps LA → Panama
-    ("Awarua, New Zealand",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
+    ("Malaga, Spain",                  "Aalborg, Denmark",  600e6),   # 1 Gbps  Malaga → LA
+    ("Los Angeles, California, US",    "Panama",            600e6),   # 800 Mbps LA → Panama
+    # ("Awarua, New Zealand",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
 ]
 
 if extraTrafficEnabled:
