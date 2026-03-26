@@ -8,7 +8,7 @@ n_order_adj: 1 # number of order for adjacency matrix
 
 #gat parameters
 hidden_feats: 8
-mlp_hidden_feats: 32
+mlp_hidden_feats: [32, 32, 8]
 
 #gat learner parameters
 learning_rate: 0.0005

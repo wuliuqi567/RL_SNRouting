@@ -111,12 +111,21 @@ class GATModel(nn.Module):
         # Each node has feature dim: gat_hidden_feats * num_heads
         mlp_in_dim = self.num_nodes * gat_hidden_feats * num_heads
         
-        self.mlp = nn.Sequential(
-            nn.Linear(mlp_in_dim, mlp_hidden_feats),
-            nn.ReLU(),
-            nn.Dropout(0.5), # 防止过拟合
-            nn.Linear(mlp_hidden_feats, out_classes)
-        )
+        hidden_dims = mlp_hidden_feats if isinstance(mlp_hidden_feats, (list, tuple)) else [mlp_hidden_feats]
+        hidden_dims = [int(dim) for dim in hidden_dims if dim is not None]
+
+        mlp_layers = []
+        prev_dim = mlp_in_dim
+        for hidden_dim in hidden_dims:
+            mlp_layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.5), # 防止过拟合
+            ])
+            prev_dim = hidden_dim
+        mlp_layers.append(nn.Linear(prev_dim, out_classes))
+
+        self.mlp = nn.Sequential(*mlp_layers)
 
     def forward(self, h, g=None):
         """Forward pass.

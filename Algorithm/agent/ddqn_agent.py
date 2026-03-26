@@ -90,18 +90,27 @@ class DDQNModel(nn.Module):
         super(DDQNModel, self).__init__()
         
         # 1. 用于特征提取
-        self.linear = nn.Linear(in_feats, 8)  # 假设我们使用5个节点的特征拼接作为输入
+        self.linear = nn.Linear(in_feats, hidden_feats)  # 假设我们使用5个节点的特征拼接作为输入
         # 2. 计算 MLP 的输入维度
         self.num_nodes = 2 * n_order_adj * (n_order_adj + 1) + 1  # 计算子图中的节点数
         mlp_in_dim = hidden_feats * self.num_nodes  # 假设我们使用5个节点的特征拼接作为输入
         
         # 3. MLP 层：用于决策
-        self.mlp = nn.Sequential(
-            nn.Linear(mlp_in_dim, mlp_hidden_feats),
-            nn.ReLU(),
-            nn.Dropout(0.5), # 防止过拟合
-            nn.Linear(mlp_hidden_feats, out_classes)
-        )
+        hidden_dims = mlp_hidden_feats if isinstance(mlp_hidden_feats, (list, tuple)) else [mlp_hidden_feats]
+        hidden_dims = [int(dim) for dim in hidden_dims if dim is not None]
+
+        mlp_layers = []
+        prev_dim = mlp_in_dim
+        for hidden_dim in hidden_dims:
+            mlp_layers.extend([
+                nn.Linear(prev_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Dropout(0.5), # 防止过拟合
+            ])
+            prev_dim = hidden_dim
+        mlp_layers.append(nn.Linear(prev_dim, out_classes))
+
+        self.mlp = nn.Sequential(*mlp_layers)
 
     def forward(self, h, g=None):
         """Forward pass.
