@@ -1,5 +1,5 @@
 # base config
-agent: 'MHGNN' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
+agent: 'GAT' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
 use_rl_model: true # false: shortest-path only (no RL model)
 seed: 42
 logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
@@ -15,11 +15,32 @@ n_order_adj: 4 # number of order for adjacency matrix
 action_size: 4 # number of possible actions
 input_dim: 10 # dimension of input each node features
 
+# shared RL hyperparameters (can be overridden in each algo yaml)
+gamma: 0.99
+learning_rate: 0.0005
+train_epoch: 4
+
+buffer_size: 1000000
+batch_size: 128
+
+tau: 0.01
+MAX_EPSILON: 0.8
+MIN_EPSILON: 0.00
+LAMBDA: 0.0005
+decayRate: 50
+
+nTrain: 120
+updateF: 23
+
+w1: 50        # rewards the getting to empty queues
+w2: 20        # rewards getting closes phisycally
+w4: 5         # Normalization for the distance reward, for the traveled distance factor
+
 # training parameters
 train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
 mode_load_dir: "SimResults/MPNN/best_model/20-57-38_Starlink_3s_GTs_[2]/"
-outputPath: '/home/qwer/Desktop/RL_SNRouting/./SimResults_new/MHGNN/2026-03-25/22-10-49_Starlink_3s_GTs_[31]_fp8_t1.66G_MS2AD800M_LACU2P800M_ANZ2JMN10M_p5/train/'
-power: 2 # epsilon 衰减中的幂指数因子，默认 2，根据网关数量适当调整
+outputPath: '/home/qwer/Desktop/RL_SNRouting/./SimResults_new/GAT/2026-03-26/10-01-12_Starlink_3s_GTs_[31]_fp8_t1.66G_MS2AD800M_LACU2P800M_ANZ2JMN10M_p5/train/'
+power: 3 # epsilon 衰减中的幂指数因子，默认 2，根据网关数量适当调整
 CurrentGTnumber: 31

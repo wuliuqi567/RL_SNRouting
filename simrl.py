@@ -91,7 +91,12 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
     logger.info('%s', earth)
     logger.info('')
 
-    earth.linkCells2GTs(distance)
+    _traffic_mode = getattr(system_configure, 'trafficMode', 'all2all')
+    if _traffic_mode != 'fixed_pairs':
+        earth.linkCells2GTs(distance)
+    else:
+        logger.info('trafficMode=fixed_pairs: skip linkCells2GTs() to reduce initialization time.')
+
     earth.linkSats2GTs("Optimize")
     graph = createGraph(earth, matching=matching)
     earth.graph = graph
@@ -163,7 +168,6 @@ def initialize(env, agent_class, popMapLocation, allGateWayInfo, distance, movem
     logger.info('Traffic generated per GT (totalAvgFlow per Milliard):')
     logger.info('----------------------------------')
 
-    _traffic_mode = getattr(system_configure, 'trafficMode', 'all2all')
     _traffic_pairs = getattr(system_configure, 'trafficPairs', [])
     _supports_all2all = _traffic_mode == 'all2all'
     _supports_fixed_pairs = _traffic_mode == 'fixed_pairs'

@@ -166,3 +166,29 @@ power: 2
 
 - `power` 越大，分母越大，epsilon 衰减越慢。
 - `power` 越小，epsilon 衰减越快。
+
+---
+
+## 8) 四种算法关键参数汇总
+
+以下参数来自当前配置文件：
+
+- `Algorithm/algo_config/ddqn.yaml`
+- `Algorithm/algo_config/gat.yaml`
+- `Algorithm/algo_config/gnn_pd.yaml`
+- `Algorithm/algo_config/gnnedge_pd.yaml`
+- `Algorithm/algo_config/mpnn.yaml`
+
+| 算法 | n_order_adj | num_layers | learning_rate | buffer_size | updateF | nTrain | batch_size |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| DDQN | 1 | - | 0.0005 | 1000000 | 23 | 120 | 128 |
+| GAT | 1 | 1 | 0.0001 | 1000000 | 23 | 120 | 128 |
+| MHGNN (`gnn_pd.yaml`) | 4* | 3 | 0.0001 | 1000000 | 23 | 120 | 128 |
+| MHGNNKGE (`gnnedge_pd.yaml`) | 4* | 3 | 0.002 | 1000000 | 23 | 120 | 128 |
+| MPNN | 3 | 2 | 0.0001 | 1000000 | 20 | 120 | 128 |
+
+备注：
+
+- `MHGNN` 的 `n_order_adj` 在 `gnn_pd.yaml` 未单独定义，当前使用 `Algorithm/algo_config/base_config.yaml` 的值（目前为 `4`）。
+- `MHGNNKGE` 的 `n_order_adj` 在 `gnnedge_pd.yaml` 未单独定义，当前也使用 `Algorithm/algo_config/base_config.yaml` 的值（目前为 `4`）。
+- `DDQN` 配置中没有 `num_layers` 字段，因此表中记为 `-`。
