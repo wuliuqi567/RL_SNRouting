@@ -18,6 +18,7 @@ input_dim: 10 # dimension of input each node features
 # shared RL hyperparameters (can be overridden in each algo yaml)
 gamma: 0.99
 learning_rate: 0.0005
+end_factor: 0.1
 train_epoch: 4
 
 buffer_size: 1000000

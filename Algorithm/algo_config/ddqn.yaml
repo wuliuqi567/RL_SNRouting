@@ -4,13 +4,15 @@ agent: 'DDQN' #
 project_name: "sn_DDQN"
 
 # environment parameters
-n_order_adj: 1 # number of order for adjacency matrix
+n_order_adj: 2 # number of order for adjacency matrix
 
 #gat parameters
 hidden_feats: 8
-mlp_hidden_feats: [32, 32, 8]
+# mlp_hidden_feats: [32, 32, 8]
+mlp_hidden_feats: [128, 32, 8]
 
 #gat learner parameters
 learning_rate: 0.0005
-lr_decay_steps: 10000
-# pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
+lr_decay_steps: 3000000
+# end_factor: 0.5
+updateF: 30

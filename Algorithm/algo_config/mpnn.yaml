@@ -12,5 +12,7 @@ num_layers: 2 # corresponding to modifying n_order_adj
 mlp_hidden_feats: [32, 32, 8]
 
 #gat learner parameters
-lr_decay_steps: 10000
-# pd_loss: "KL_V2" # options: "MSE", "Huber", "KL", "KL_V2"
+learning_rate: 0.0005
+lr_decay_steps: 3000000
+# end_factor: 0.5
+updateF: 30

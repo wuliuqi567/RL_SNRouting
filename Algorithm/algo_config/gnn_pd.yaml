@@ -34,9 +34,11 @@ temperature: 2.0
 ## training parameters
 
 learning_rate: 0.0005
-lr_decay_steps: 1000000
+lr_decay_steps: 3000000
+end_factor: 0.2
 student_learning_rate: 0.0005
-student_lr_decay_steps: 1000000
+student_lr_decay_steps: 3000000
+student_end_factor: 0.1
 student_model: "magna" # options: "magna" or "mlp"
 student_hidden_dims: [64, 64, 32]
 # student_hidden_dims: [64, 32]
