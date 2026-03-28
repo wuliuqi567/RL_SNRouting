@@ -2,7 +2,7 @@
 agent: 'GAT' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
 use_rl_model: true # false: shortest-path only (no RL model)
 seed: 42
-logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
+logger: 'tensorboard' # options: 'wandb', 'tensorboard', 'swanlab'
 project_name: "satNetEnv3"
 wandb_user_name: "wmqbit"
 log_dir: 'logs'
@@ -36,6 +36,36 @@ updateF: 23
 w1: 50        # rewards the getting to empty queues
 w2: 20        # rewards getting closes phisycally
 w4: 5         # Normalization for the distance reward, for the traveled distance factor
+
+# reward shaping modes: legacy | layer1 | layer2 | layer3
+reward_mode: 'layer1'
+arrive_reward: 50.0
+failure_penalty: 50.0
+loop_penalty: 10.0
+
+# layer1: weaker geometry + stronger queue sensitivity + hop penalty
+reward_distance_scale: 4.0
+reward_distance_ref: 1.0
+reward_queue_scale: 8.0
+reward_queue_ref: 0.003
+reward_hop_penalty: 0.3
+
+# layer2: immediate delay cost + delay-to-go shaping
+reward_prop_scale: 1.0
+reward_prop_ref: 0.01
+reward_tx_scale: 1.0
+reward_tx_ref: 0.001
+reward_delay_beta: 3.0
+reward_delay_ref: 1.0
+reward_remaining_queue_scale: 0.5
+reward_remaining_hop_cost: 0.2
+
+# layer3: layer2 + local congestion lookahead
+reward_local_congestion_scale: 2.0
+reward_local_congestion_ref: 0.01
+
+reward_min_rate: 1000000.0
+reward_cache_time_precision: 6
 
 # training parameters
 train_TA_model: true # whether to train the teacher agent network

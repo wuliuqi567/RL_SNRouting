@@ -184,40 +184,13 @@ class MHGNNEDGEAgent(BaseAgent):
 
 
     def _calculate_reward_v1(self, block, sat, prevSat, is_terminal=False, is_failure=False):
-        """Helper to calculate reward based on state."""
-        w1 = 20        # rewards the getting to empty queues
-        w2 = 20        # rewards getting closes phisycally   
-        w4 = 5         # Normalization for the distance reward, for the traveled distance factor 
-        ArriveReward = 50        # Reward given to the system in case it sends the data block to the satellite linked to the destination gateway
-        distanceRew = 4          # 1: Distance reward normalized to total distance.
-                                 # 2: Distance reward normalized to average moving possibilities
-                                 # 3: Distance reward normalized to maximum close up
-                                 # 4: Distance reward normalized by max isl distance ~3.700 km for Kepler constellation. This is the one used in the papers.
-                                 # 5: Only negative rewards proportional to traveled distance normalized by 1.000 km
-        againPenalty= -10       # Penalty if the satellite sends the block to a hop where it has already been
-
-        satDest = block.destination.linkedSat[1]
-        if satDest is None:
-            print("No linked sat for destination GT")
-        if prevSat is None:
-            assert False, "Previous satellite is None in reward calculation."
-
-        queueReward = 0
-        if block.queueTime:
-            queueReward = getQueueReward(block.queueTime[-1], w1)
-        distanceReward = getDistanceRewardV4(prevSat, sat, satDest, w2, w4)
-
-        if is_failure:
-            return distanceReward + queueReward - ArriveReward
-        if is_terminal:
-            return distanceReward + queueReward + ArriveReward
-        
-        hop = [sat.ID, math.degrees(sat.longitude), math.degrees(sat.latitude)]
-        if hop in block.QPath[:len(block.QPath)-2]:
-            again = againPenalty
-        else:
-            again = 0
-        return distanceReward + queueReward + again
+        return super()._calculate_reward_v1(
+            block,
+            sat,
+            prevSat,
+            is_terminal=is_terminal,
+            is_failure=is_failure,
+        )
 
     def _calculate_reward_v2(self, block, sat, prevSat, is_terminal=False, is_failure=False):
         w = 5        # rewards the getting to empty queues

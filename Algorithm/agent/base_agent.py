@@ -6,6 +6,7 @@ import torch
 import random
 import math
 import re
+import networkx as nx
 from ..common.common_tools import get_time_string, create_directory
 from ..common.experienceReplay import ExperienceReplay
 from torch.utils.tensorboard import SummaryWriter
@@ -18,7 +19,8 @@ import yaml
 import sys
 import system_configure
 from Utils.statefunction import getDeepLinkedSats, get_subgraph_state
-from Utils.utilsfunction import getQueueReward, getDistanceRewardV4
+from Utils.utilsfunction import getQueueReward, getDistanceRewardV4, getQueues, getSlantRange
+
 
 def get_configs(file_dir):
     """Get dict variable from a YAML file.
@@ -30,7 +32,7 @@ def get_configs(file_dir):
     """
     current_dir = os.path.dirname(os.path.abspath(__file__))
     base_config_file_dir = os.path.join(current_dir, "../algo_config/base_config.yaml")
-    
+
     with open(base_config_file_dir, "r") as f:
         try:
             base_config_dict = yaml.load(f, Loader=yaml.FullLoader)
@@ -40,7 +42,7 @@ def get_configs(file_dir):
     # file_dir is passed as relative path like "../algo_config/gnn_pd.yaml"
     # We assume it is relative to this file (mhgnn_agent.py)
     config_file_path = os.path.join(current_dir, file_dir)
-    
+
     with open(config_file_path, "r") as f:
         try:
             config_dict = yaml.load(f, Loader=yaml.FullLoader)
@@ -49,6 +51,7 @@ def get_configs(file_dir):
         except yaml.YAMLError as exc:
             assert False, config_file_path + " error: {}".format(exc)
     return base_config_dict
+
 
 def save_configs(configs_dict, save_path):
     """Save dict variable to a YAML file.
@@ -77,7 +80,7 @@ class BaseAgent(ABC):
         self.model_dir_save = config.model_dir + seed
         time_string = get_time_string()
         self.model_dir_save = os.path.join(self.outputPath, self.model_dir_save)
-        
+
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
         else:
@@ -133,6 +136,30 @@ class BaseAgent(ABC):
         self.w1 = getattr(config, 'w1', 20)
         self.w2 = getattr(config, 'w2', 20)
         self.w4 = getattr(config, 'w4', 5)
+
+        self.reward_mode = getattr(config, 'reward_mode', 'layer1').lower()
+        self.arrive_reward = float(getattr(config, 'arrive_reward', 50.0))
+        self.failure_penalty = float(getattr(config, 'failure_penalty', 50.0))
+        self.loop_penalty = float(getattr(config, 'loop_penalty', 10.0))
+        self.reward_distance_scale = float(getattr(config, 'reward_distance_scale', 4.0))
+        self.reward_distance_ref = float(getattr(config, 'reward_distance_ref', 1.0))
+        self.reward_queue_scale = float(getattr(config, 'reward_queue_scale', 8.0))
+        self.reward_queue_ref = float(getattr(config, 'reward_queue_ref', 0.003))
+        self.reward_hop_penalty = float(getattr(config, 'reward_hop_penalty', 0.3))
+        self.reward_prop_scale = float(getattr(config, 'reward_prop_scale', 1.0))
+        self.reward_prop_ref = float(getattr(config, 'reward_prop_ref', 0.01))
+        self.reward_tx_scale = float(getattr(config, 'reward_tx_scale', 1.0))
+        self.reward_tx_ref = float(getattr(config, 'reward_tx_ref', 0.001))
+        self.reward_delay_beta = float(getattr(config, 'reward_delay_beta', 3.0))
+        self.reward_delay_ref = float(getattr(config, 'reward_delay_ref', 1.0))
+        self.reward_remaining_queue_scale = float(getattr(config, 'reward_remaining_queue_scale', 0.5))
+        self.reward_remaining_hop_cost = float(getattr(config, 'reward_remaining_hop_cost', 0.2))
+        self.reward_local_congestion_scale = float(getattr(config, 'reward_local_congestion_scale', 2.0))
+        self.reward_local_congestion_ref = float(getattr(config, 'reward_local_congestion_ref', 0.01))
+        self.reward_min_rate = max(float(getattr(config, 'reward_min_rate', 1e6)), 1.0)
+        self.reward_cache_time_precision = int(getattr(config, 'reward_cache_time_precision', 6))
+        self._delay_to_go_cache = {}
+        self._sat_lookup_cache = {}
 
     def _safe_wandb_log(self, payload: dict, step: int | None = None) -> None:
         """Log to swanlab/wandb but never crash the simulation if logging fails."""
@@ -201,7 +228,7 @@ class BaseAgent(ABC):
 
     # def test(self, env_fn, steps):
     #     raise NotImplementedError
-    
+
     def makeDeepAction(self, block, sat, g, earth, prevSat=None, *args):
         recalculate_flag = args and args[0] == 'recalculate'
         training_mode = self.train_TA_model and not recalculate_flag
@@ -248,7 +275,7 @@ class BaseAgent(ABC):
             block.oldAction = actIndex
 
         return nextHop
-    
+
     def store_experience(self, block, reward, new_state, is_terminal, sat, earth, recalculate_flag=False):
         if not recalculate_flag:
             block.stepReward.append(reward)
@@ -277,9 +304,9 @@ class BaseAgent(ABC):
     def _resolve_model_dir(self):
         model_dir = self.model_dir_save
         if 'test_teacher_network' in model_dir:
-            model_dir = re.sub(r'test_teacher_network[^/\\]*', 'train', model_dir)
+            model_dir = re.sub(r'test_teacher_network[^/\]*', 'train', model_dir)
         elif 'test_student_network' in model_dir:
-            model_dir = re.sub(r'test_student_network[^/\\]*', 'train', model_dir)
+            model_dir = re.sub(r'test_student_network[^/\]*', 'train', model_dir)
 
         if not os.path.isabs(model_dir):
             model_dir = os.path.join(self.outputPath, '../train/', model_dir)
@@ -309,34 +336,278 @@ class BaseAgent(ABC):
             self.save_model()
 
     def _calculate_reward_v1(self, block, sat, prevSat, is_terminal=False, is_failure=False):
-        w1 = self.w1
-        w2 = self.w2
-        w4 = self.w4
-        ArriveReward = 50
-        againPenalty = -10
+        if prevSat is None:
+            raise AssertionError("Previous satellite is None in reward calculation.")
 
         satDest = block.destination.linkedSat[1]
         if satDest is None:
             print("No linked sat for destination GT")
-        if prevSat is None:
-            assert False, "Previous satellite is None in reward calculation."
+            return self._finalize_reward(0.0, is_terminal=is_terminal, is_failure=is_failure)
 
-        queueReward = 0
-        if block.queueTime:
-            queueReward = getQueueReward(block.queueTime[-1], w1)
-        distanceReward = getDistanceRewardV4(prevSat, sat, satDest, w2, w4)
-
-        if is_failure:
-            return distanceReward + queueReward - ArriveReward
-        if is_terminal:
-            return distanceReward + queueReward + ArriveReward
-
-        hop = [sat.ID, math.degrees(sat.longitude), math.degrees(sat.latitude)]
-        if hop in block.QPath[:len(block.QPath)-2]:
-            again = againPenalty
+        mode = self.reward_mode
+        if mode == 'legacy':
+            reward = self._calculate_reward_legacy(block, sat, prevSat, satDest)
+        elif mode == 'layer1':
+            reward = self._calculate_reward_layer1(block, sat, prevSat, satDest)
+        elif mode == 'layer2':
+            reward = self._calculate_reward_layer2(block, sat, prevSat, satDest)
+        elif mode == 'layer3':
+            reward = self._calculate_reward_layer3(block, sat, prevSat, satDest)
         else:
-            again = 0
-        return distanceReward + queueReward + again
+            print(f"[WARN] Unknown reward_mode '{mode}', fallback to layer1.")
+            reward = self._calculate_reward_layer1(block, sat, prevSat, satDest)
+
+        return self._finalize_reward(reward, is_terminal=is_terminal, is_failure=is_failure)
+
+    def _calculate_reward_legacy(self, block, sat, prevSat, satDest):
+        queue_reward = 0.0
+        if block.queueTime:
+            queue_reward = getQueueReward(block.queueTime[-1], self.w1)
+        distance_reward = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+        loop_reward = -self.loop_penalty if self._is_revisited_sat(block, sat) else 0.0
+        return distance_reward + queue_reward + loop_reward
+
+    def _calculate_reward_layer1(self, block, sat, prevSat, satDest):
+        queue_time = self._get_last_queue_time(block)
+        raw_distance = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+        distance_reward = self.reward_distance_scale * math.tanh(raw_distance / max(self.reward_distance_ref, 1e-6))
+        queue_penalty = -self.reward_queue_scale * self._log_normalize(queue_time, self.reward_queue_ref)
+        reward = distance_reward + queue_penalty - self.reward_hop_penalty
+        if self._is_revisited_sat(block, sat):
+            reward -= self.loop_penalty
+        return reward
+
+    def _calculate_reward_layer2(self, block, sat, prevSat, satDest):
+        graph = self._get_runtime_graph(sat)
+        queue_time, prop_delay, tx_delay = self._get_immediate_delays(block, prevSat, sat, graph)
+
+        immediate_cost = (
+            self.reward_queue_scale * self._log_normalize(queue_time, self.reward_queue_ref)
+            + self.reward_prop_scale * self._normalize_linear(prop_delay, self.reward_prop_ref)
+            + self.reward_tx_scale * self._normalize_linear(tx_delay, self.reward_tx_ref)
+            + self.reward_hop_penalty
+        )
+
+        reward = -immediate_cost
+        reward += self._get_delay_to_go_shaping(block, prevSat, sat, satDest, graph)
+        if self._is_revisited_sat(block, sat):
+            reward -= self.loop_penalty
+        return reward
+
+    def _calculate_reward_layer3(self, block, sat, prevSat, satDest):
+        graph = self._get_runtime_graph(sat)
+        reward = self._calculate_reward_layer2(block, sat, prevSat, satDest)
+        local_congestion_delay = self._estimate_local_congestion_delay(sat, block, graph)
+        local_penalty = self.reward_local_congestion_scale * math.tanh(
+            local_congestion_delay / max(self.reward_local_congestion_ref, 1e-6)
+        )
+        return reward - local_penalty
+
+    def _finalize_reward(self, reward, is_terminal=False, is_failure=False):
+        if is_failure:
+            return reward - self.failure_penalty
+        if is_terminal:
+            return reward + self.arrive_reward
+        return reward
+
+    def _get_last_queue_time(self, block):
+        if getattr(block, 'queueTime', None):
+            return max(float(block.queueTime[-1]), 0.0)
+        return 0.0
+
+    def _normalize_linear(self, value, ref):
+        return max(float(value), 0.0) / max(float(ref), 1e-9)
+
+    def _log_normalize(self, value, ref):
+        return math.log1p(max(float(value), 0.0) / max(float(ref), 1e-9))
+
+    def _is_revisited_sat(self, block, sat):
+        history = block.QPath[:max(len(block.QPath) - 2, 0)]
+        for hop in history:
+            hop_id = hop[0] if isinstance(hop, (list, tuple)) else hop
+            if hop_id == sat.ID:
+                return True
+        return False
+
+    def _get_runtime_graph(self, sat):
+        earth = getattr(getattr(sat, 'orbPlane', None), 'earth', None)
+        if earth is None:
+            return None
+        if getattr(earth, 'graph', None) is not None:
+            return earth.graph
+        gateways = getattr(earth, 'gateways', None)
+        if gateways:
+            return getattr(gateways[0], 'graph', None)
+        return None
+
+    def _get_earth(self, sat):
+        return getattr(getattr(sat, 'orbPlane', None), 'earth', None)
+
+    def _get_sat_lookup(self, sat):
+        earth = self._get_earth(sat)
+        if earth is None:
+            return {}
+
+        cache_key = id(earth)
+        cached = self._sat_lookup_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        sat_lookup = {}
+        for plane in earth.LEO:
+            for sat_node in plane.sats:
+                sat_lookup[sat_node.ID] = sat_node
+
+        self._sat_lookup_cache = {cache_key: sat_lookup}
+        return sat_lookup
+
+    def _get_link_metrics(self, prevSat, sat, graph=None):
+        slant_range = getSlantRange(prevSat, sat)
+        data_rate = None
+
+        if graph is not None and graph.has_edge(prevSat.ID, sat.ID):
+            edge_data = graph.edges[prevSat.ID, sat.ID]
+            slant_range = edge_data.get('slant_range', slant_range)
+            data_rate = edge_data.get('dataRateOG')
+
+        if data_rate is None or not np.isfinite(data_rate) or data_rate <= 0:
+            data_rate = self.reward_min_rate
+
+        return max(float(slant_range), 0.0), max(float(data_rate), self.reward_min_rate)
+
+    def _get_immediate_delays(self, block, prevSat, sat, graph=None):
+        queue_time = self._get_last_queue_time(block)
+        slant_range, data_rate = self._get_link_metrics(prevSat, sat, graph)
+        prop_delay = slant_range / system_configure.Vc
+        tx_delay = block.size / data_rate
+        return queue_time, prop_delay, tx_delay
+
+    def _iter_neighbor_metrics(self, sat, graph=None):
+        queues = getQueues(sat, DDQN=True)
+        directions = (
+            ('U', getattr(sat, 'upper', None)),
+            ('D', getattr(sat, 'lower', None)),
+            ('R', getattr(sat, 'right', None)),
+            ('L', getattr(sat, 'left', None)),
+        )
+
+        metrics = []
+        for direction, neighbor in directions:
+            if neighbor is None:
+                continue
+
+            queue_len = queues.get(direction, np.inf)
+            if not np.isfinite(queue_len):
+                continue
+
+            slant_range = getSlantRange(sat, neighbor)
+            data_rate = self.reward_min_rate
+            if graph is not None and graph.has_edge(sat.ID, neighbor.ID):
+                edge_data = graph.edges[sat.ID, neighbor.ID]
+                slant_range = edge_data.get('slant_range', slant_range)
+                data_rate = edge_data.get('dataRateOG', data_rate)
+
+            if not np.isfinite(data_rate) or data_rate <= 0:
+                data_rate = self.reward_min_rate
+
+            metrics.append(
+                (
+                    direction,
+                    max(float(queue_len), 0.0),
+                    max(float(slant_range), 0.0),
+                    max(float(data_rate), self.reward_min_rate),
+                )
+            )
+
+        return metrics
+
+    def _estimate_best_egress_delay(self, sat, block, graph=None):
+        candidates = []
+        for _, queue_len, slant_range, data_rate in self._iter_neighbor_metrics(sat, graph):
+            queue_wait = queue_len * block.size / data_rate
+            prop_delay = slant_range / system_configure.Vc
+            candidates.append(queue_wait + prop_delay)
+
+        if not candidates:
+            return self.reward_local_congestion_ref * 2.0
+        return min(candidates)
+
+    def _estimate_local_congestion_delay(self, sat, block, graph=None):
+        candidates = []
+        for _, queue_len, slant_range, data_rate in self._iter_neighbor_metrics(sat, graph):
+            queue_wait = queue_len * block.size / data_rate
+            prop_delay = slant_range / system_configure.Vc
+            candidates.append(queue_wait + prop_delay)
+
+        if not candidates:
+            return self.reward_local_congestion_ref * 2.0
+
+        candidates.sort()
+        return float(np.mean(candidates[: min(2, len(candidates))]))
+
+    def _get_delay_to_go_cache_key(self, graph, satDest, block_size, env_now):
+        return (
+            id(graph),
+            satDest.ID,
+            int(block_size),
+            round(float(env_now), self.reward_cache_time_precision),
+        )
+
+    def _get_delay_to_go(self, block, sat_from, satDest, graph):
+        if graph is None or satDest is None:
+            return None
+        if sat_from.ID == satDest.ID:
+            return 0.0
+        if satDest.ID not in graph:
+            return None
+
+        cache_key = self._get_delay_to_go_cache_key(graph, satDest, block.size, sat_from.env.now)
+        lengths = self._delay_to_go_cache.get(cache_key)
+        if lengths is None:
+            sat_lookup = self._get_sat_lookup(sat_from)
+            node_delay = {}
+            for sat_id, sat_node in sat_lookup.items():
+                if sat_id == satDest.ID:
+                    node_delay[sat_id] = 0.0
+                else:
+                    best_delay = self._estimate_best_egress_delay(sat_node, block, graph)
+                    node_delay[sat_id] = self.reward_remaining_queue_scale * self._normalize_linear(
+                        best_delay,
+                        self.reward_queue_ref,
+                    )
+
+            reverse_graph = graph.reverse(copy=False)
+
+            def weight(rev_u, rev_v, data):
+                prop_delay = max(float(data.get('slant_range', 0.0)), 0.0) / system_configure.Vc
+                data_rate = data.get('dataRateOG', self.reward_min_rate)
+                if not np.isfinite(data_rate) or data_rate <= 0:
+                    data_rate = self.reward_min_rate
+                tx_delay = block.size / max(float(data_rate), self.reward_min_rate)
+                return (
+                    self.reward_prop_scale * self._normalize_linear(prop_delay, self.reward_prop_ref)
+                    + self.reward_tx_scale * self._normalize_linear(tx_delay, self.reward_tx_ref)
+                    + self.reward_remaining_hop_cost
+                    + node_delay.get(rev_u, 0.0)
+                )
+
+            lengths = nx.single_source_dijkstra_path_length(reverse_graph, satDest.ID, weight=weight)
+            self._delay_to_go_cache = {cache_key: lengths}
+
+        return lengths.get(sat_from.ID)
+
+    def _get_delay_to_go_shaping(self, block, prevSat, sat, satDest, graph):
+        prev_delay = self._get_delay_to_go(block, prevSat, satDest, graph)
+        cur_delay = self._get_delay_to_go(block, sat, satDest, graph)
+
+        if prev_delay is None or cur_delay is None:
+            fallback_distance = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
+            return 0.5 * self.reward_distance_scale * math.tanh(
+                fallback_distance / max(self.reward_distance_ref, 1e-6)
+            )
+
+        improvement = prev_delay - cur_delay
+        return self.reward_delay_beta * math.tanh(improvement / max(self.reward_delay_ref, 1e-6))
 
     def alignEpsilon(self, step, sat):
         maxEps = self.config.MAX_EPSILON

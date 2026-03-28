@@ -1,5 +1,5 @@
 
-# install guide
+# install guide on linux
 - pytorch 2.4.0, diff cuda version
 ```python 
 # ROCM 6.1 (Linux only)
@@ -23,6 +23,9 @@ pip install  dgl -f https://data.dgl.ai/wheels/torch-2.4/cu121/repo.html
 
 pip install  dgl -f https://data.dgl.ai/wheels/torch-2.4/cu118/repo.html
 ```
+
+
+# install guide on win 不支持
 
 
 # 一 state space
