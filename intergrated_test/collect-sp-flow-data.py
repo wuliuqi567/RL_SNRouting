@@ -105,16 +105,21 @@ def merge_block_info(base_dir: Path, csv_name: str, output_name: str, sort_by: s
 
 	merged_rows = sort_merged_rows(merged_rows, sort_by=sort_by, descending=descending)
 
-	meta_columns = [
-		# "source_csv",
-		# "run_dir",
+	preferred_columns = [
 		"flow_total_gbps",
-		"flow_min_mbps",
-		"flow_max_mbps",
-		"flow_avg_mbps",
-		"flow_values_mbps",
+		"createdBlocks",
+		"receivedDataBlocks",
+		"stuckBlocks",
+		"avgTime",
+		"Queue time",
+		"Transmission time",
+		"Propagation time",
 	]
-	fieldnames = meta_columns + sorted(col for col in all_input_columns if col not in meta_columns)
+	remaining_columns = sorted(
+		col for col in all_input_columns
+		if col not in preferred_columns
+	)
+	fieldnames = preferred_columns + remaining_columns
 
 	output_path = base_dir / output_name
 	with output_path.open("w", encoding="utf-8", newline="") as f:

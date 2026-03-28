@@ -13,6 +13,7 @@ Usage:
 Output files (written to ./AllPairsPaths/):
     all_pairs_paths.csv   - one row per (source, destination) pair
     all_pairs_paths.json  - full path detail including every hop's coordinates
+                            and per-link bandwidth detail
 """
 
 import os
@@ -103,6 +104,12 @@ def compute_all_pairs_paths(earth, graph, weight: str):
                     'total_slant_range_km': None,
                     'total_propagation_delay_ms': None,
                     'min_dataRate_bps': None,
+                    'bottleneck_hop_index': None,
+                    'bottleneck_from_node': None,
+                    'bottleneck_to_node': None,
+                    'link_detail': None,
+                    'link_rates_mbps': None,
+                    'path_with_link_mbps': None,
                     'path_node_ids': None,
                     'path_detail': None,
                 })
@@ -119,6 +126,12 @@ def compute_all_pairs_paths(earth, graph, weight: str):
                     'total_slant_range_km': None,
                     'total_propagation_delay_ms': None,
                     'min_dataRate_bps': None,
+                    'bottleneck_hop_index': None,
+                    'bottleneck_from_node': None,
+                    'bottleneck_to_node': None,
+                    'link_detail': None,
+                    'link_rates_mbps': None,
+                    'path_with_link_mbps': None,
                     'path_node_ids': None,
                     'path_detail': None,
                 })
@@ -127,7 +140,12 @@ def compute_all_pairs_paths(earth, graph, weight: str):
             # gather per-hop metrics
             total_slant_range = 0.0
             min_rate = float('inf')
+            bottleneck_hop_index = None
+            bottleneck_from_node = None
+            bottleneck_to_node = None
             hops_detail = []
+            link_detail = []
+            path_with_link_parts = [str(nx_path[0])]
 
             for i, node_id in enumerate(nx_path):
                 nd = graph.nodes[node_id]
@@ -149,8 +167,35 @@ def compute_all_pairs_paths(earth, graph, weight: str):
                     sr = edge_data.get('slant_range', 0)
                     total_slant_range += sr
                     rate = edge_data.get('dataRateOG', float('inf'))
+                    rate_mbps = None if rate == float('inf') else round(rate / 1e6, 2)
+                    from_node = str(nx_path[i - 1])
+                    to_node = str(nx_path[i])
+
+                    link_detail.append({
+                        'hop_index': i,
+                        'from_node': from_node,
+                        'to_node': to_node,
+                        'dataRate_bps': None if rate == float('inf') else rate,
+                        'dataRate_Mbps': rate_mbps,
+                    })
+
                     if rate < min_rate:
                         min_rate = rate
+                        bottleneck_hop_index = i
+                        bottleneck_from_node = from_node
+                        bottleneck_to_node = to_node
+
+            # Build a human-readable path string with per-link bandwidth.
+            # Example: A -[100.0Mbps]-> B -[80.0Mbps*]-> C
+            for edge_info in link_detail:
+                edge_rate = edge_info['dataRate_Mbps']
+                edge_rate_text = f"{edge_rate:.2f}Mbps" if edge_rate is not None else "N/A"
+                marker = "*" if edge_info['hop_index'] == bottleneck_hop_index else ""
+                path_with_link_parts.append(f"-[{edge_rate_text}{marker}]->")
+                path_with_link_parts.append(edge_info['to_node'])
+
+            link_rates_mbps = [edge_info['dataRate_Mbps'] for edge_info in link_detail]
+            path_with_link_mbps = ' '.join(path_with_link_parts)
 
             prop_delay_ms = (total_slant_range / Vc) * 1000  # metres / (m/s) -> s -> ms
 
@@ -162,6 +207,12 @@ def compute_all_pairs_paths(earth, graph, weight: str):
                 'total_slant_range_km': round(total_slant_range / 1000, 2),
                 'total_propagation_delay_ms': round(prop_delay_ms, 4),
                 'min_dataRate_bps': min_rate if min_rate != float('inf') else None,
+                'bottleneck_hop_index': bottleneck_hop_index,
+                'bottleneck_from_node': bottleneck_from_node,
+                'bottleneck_to_node': bottleneck_to_node,
+                'link_detail': link_detail,
+                'link_rates_mbps': link_rates_mbps,
+                'path_with_link_mbps': path_with_link_mbps,
                 'path_node_ids': ' -> '.join(str(n) for n in nx_path),
                 'path_detail': hops_detail,
             })
@@ -183,6 +234,12 @@ def save_results(results, output_dir: str):
             'total_slant_range_km': r['total_slant_range_km'],
             'total_propagation_delay_ms': r['total_propagation_delay_ms'],
             'min_dataRate_Mbps': round(r['min_dataRate_bps'] / 1e6, 2) if r['min_dataRate_bps'] else None,
+            'bottleneck_dataRate_Mbps': round(r['min_dataRate_bps'] / 1e6, 2) if r['min_dataRate_bps'] else None,
+            'bottleneck_hop_index': r['bottleneck_hop_index'],
+            'bottleneck_from_node': r['bottleneck_from_node'],
+            'bottleneck_to_node': r['bottleneck_to_node'],
+            'link_rates_mbps': ', '.join(f"{v:.2f}" for v in (r['link_rates_mbps'] or []) if v is not None),
+            'path_with_link_mbps': r['path_with_link_mbps'],
             'path_node_ids': r['path_node_ids'],
         })
     csv_path = os.path.join(output_dir, 'all_pairs_paths.csv')
