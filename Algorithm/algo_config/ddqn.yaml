@@ -1,7 +1,7 @@
 
 # base config
 agent: 'DDQN' #
-project_name: "sn_DDQN"
+project_name: "sn_DDQN-newreward"
 
 # environment parameters
 n_order_adj: 2 # number of order for adjacency matrix
