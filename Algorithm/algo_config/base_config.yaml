@@ -1,8 +1,13 @@
 # base config
 agent: 'GAT' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
 use_rl_model: true # false: shortest-path only (no RL model)
+
+# training parameters
+train_TA_model: true # whether to train the teacher agent network
+use_student_network: false # whether to use the student network for action selection
+
 seed: 42
-logger: 'tensorboard' # options: 'wandb', 'tensorboard', 'swanlab'
+logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
 project_name: "satNetEnv3"
 wandb_user_name: "wmqbit"
 log_dir: 'logs'
@@ -69,11 +74,8 @@ reward_cache_time_precision: 6
 reward_log_enabled: false
 reward_log_interval: 100
 
-# training parameters
-train_TA_model: true # whether to train the teacher agent network
-use_student_network: false # whether to use the student network for action selection
 
 mode_load_dir: "SimResults_new/MHGNN/2026-03-25/09-59-20_Starlink_3s_GTs_[31]_fp2_t1.60G_MS2AD800M_LACU2P800M/" # directory to load the model for evaluation or further training, should end with /
-outputPath: '/home/qwer/Desktop/RL_SNRouting/intergrated_test/.mhgnn_parallel_runs/flow_1000M/./SimResults_new/GAT/2026-03-27/14-25-42_Starlink_3s_GTs_[31]_fp3_t3.00G_MS2AD1000M_LACU2P1000M_ANZ2JMN1000M/train/'
+outputPath: '/home/qwer/Desktop/RL_SNRouting/./SimResults_new/GAT/2026-03-29/23-09-41_Starlink_3s_GTs_[31]_fp3_t1.61G_MS2AD800M_LACU2P800M_ANZ2JMN10M/train/'
 power: 3 # epsilon 衰减中的幂指数因子，默认 2，根据网关数量适当调整
 CurrentGTnumber: 31

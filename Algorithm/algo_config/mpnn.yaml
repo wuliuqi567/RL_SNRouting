@@ -1,7 +1,7 @@
 
 # base config
 agent: 'MPNN' #
-project_name: "sn_MPNN"
+project_name: "sn_MPNN-newreward"
 
 # environment parameters
 n_order_adj: 3 # number of order for adjacency matrix

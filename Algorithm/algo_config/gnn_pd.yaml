@@ -1,7 +1,7 @@
 
 # base config
 agent: 'MHGNN' #
-project_name: "sn_MHGNN_fixedGTsPairs"
+project_name: "sn_MHGNN_fixedGTsPairs_newreward"
 
 # agent hyperparameters
 ## model parameters

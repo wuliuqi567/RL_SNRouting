@@ -1,7 +1,7 @@
 
 # base config
 agent: 'GAT' #
-project_name: "SN_GAT"
+project_name: "SN_GAT-newreward"
 
 # environment parameters
 n_order_adj: 2 # number of order for adjacency matrix
