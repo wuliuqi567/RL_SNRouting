@@ -66,6 +66,8 @@ reward_local_congestion_ref: 0.01
 
 reward_min_rate: 1000000.0
 reward_cache_time_precision: 6
+reward_log_enabled: false
+reward_log_interval: 100
 
 # training parameters
 train_TA_model: true # whether to train the teacher agent network

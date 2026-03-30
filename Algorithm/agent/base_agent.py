@@ -158,6 +158,8 @@ class BaseAgent(ABC):
         self.reward_local_congestion_ref = float(getattr(config, 'reward_local_congestion_ref', 0.01))
         self.reward_min_rate = max(float(getattr(config, 'reward_min_rate', 1e6)), 1.0)
         self.reward_cache_time_precision = int(getattr(config, 'reward_cache_time_precision', 6))
+        self.reward_log_enabled = bool(getattr(config, 'reward_log_enabled', False))
+        self.reward_log_interval = max(int(getattr(config, 'reward_log_interval', 100)), 1)
         self._delay_to_go_cache = {}
         self._sat_lookup_cache = {}
 
@@ -346,18 +348,28 @@ class BaseAgent(ABC):
 
         mode = self.reward_mode
         if mode == 'legacy':
-            reward = self._calculate_reward_legacy(block, sat, prevSat, satDest)
+            reward, reward_info = self._calculate_reward_legacy(block, sat, prevSat, satDest)
         elif mode == 'layer1':
-            reward = self._calculate_reward_layer1(block, sat, prevSat, satDest)
+            reward, reward_info = self._calculate_reward_layer1(block, sat, prevSat, satDest)
         elif mode == 'layer2':
-            reward = self._calculate_reward_layer2(block, sat, prevSat, satDest)
+            reward, reward_info = self._calculate_reward_layer2(block, sat, prevSat, satDest)
         elif mode == 'layer3':
-            reward = self._calculate_reward_layer3(block, sat, prevSat, satDest)
+            reward, reward_info = self._calculate_reward_layer3(block, sat, prevSat, satDest)
         else:
             print(f"[WARN] Unknown reward_mode '{mode}', fallback to layer1.")
-            reward = self._calculate_reward_layer1(block, sat, prevSat, satDest)
+            reward, reward_info = self._calculate_reward_layer1(block, sat, prevSat, satDest)
 
-        return self._finalize_reward(reward, is_terminal=is_terminal, is_failure=is_failure)
+        final_reward = self._finalize_reward(reward, is_terminal=is_terminal, is_failure=is_failure)
+        self._maybe_log_reward_breakdown(
+            sat,
+            mode,
+            reward_info,
+            reward,
+            final_reward,
+            is_terminal=is_terminal,
+            is_failure=is_failure,
+        )
+        return final_reward
 
     def _calculate_reward_legacy(self, block, sat, prevSat, satDest):
         queue_reward = 0.0
@@ -365,7 +377,12 @@ class BaseAgent(ABC):
             queue_reward = getQueueReward(block.queueTime[-1], self.w1)
         distance_reward = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
         loop_reward = -self.loop_penalty if self._is_revisited_sat(block, sat) else 0.0
-        return distance_reward + queue_reward + loop_reward
+        reward = distance_reward + queue_reward + loop_reward
+        return reward, {
+            "distance_reward": distance_reward,
+            "queue_reward": queue_reward,
+            "loop_penalty": loop_reward,
+        }
 
     def _calculate_reward_layer1(self, block, sat, prevSat, satDest):
         queue_time = self._get_last_queue_time(block)
@@ -373,9 +390,18 @@ class BaseAgent(ABC):
         distance_reward = self.reward_distance_scale * math.tanh(raw_distance / max(self.reward_distance_ref, 1e-6))
         queue_penalty = -self.reward_queue_scale * self._log_normalize(queue_time, self.reward_queue_ref)
         reward = distance_reward + queue_penalty - self.reward_hop_penalty
+        loop_penalty = 0.0
         if self._is_revisited_sat(block, sat):
-            reward -= self.loop_penalty
-        return reward
+            loop_penalty = -self.loop_penalty
+            reward += loop_penalty
+        return reward, {
+            "queue_time": queue_time,
+            "raw_distance_reward": raw_distance,
+            "distance_reward": distance_reward,
+            "queue_penalty": queue_penalty,
+            "hop_penalty": -self.reward_hop_penalty,
+            "loop_penalty": loop_penalty,
+        }
 
     def _calculate_reward_layer2(self, block, sat, prevSat, satDest):
         graph = self._get_runtime_graph(sat)
@@ -389,19 +415,41 @@ class BaseAgent(ABC):
         )
 
         reward = -immediate_cost
-        reward += self._get_delay_to_go_shaping(block, prevSat, sat, satDest, graph)
+        shaping_reward, shaping_info = self._get_delay_to_go_shaping(block, prevSat, sat, satDest, graph)
+        reward += shaping_reward
+        loop_penalty = 0.0
         if self._is_revisited_sat(block, sat):
-            reward -= self.loop_penalty
-        return reward
+            loop_penalty = -self.loop_penalty
+            reward += loop_penalty
+        return reward, {
+            "queue_time": queue_time,
+            "prop_delay": prop_delay,
+            "tx_delay": tx_delay,
+            "immediate_cost": immediate_cost,
+            "queue_penalty": -self.reward_queue_scale * self._log_normalize(queue_time, self.reward_queue_ref),
+            "prop_penalty": -self.reward_prop_scale * self._normalize_linear(prop_delay, self.reward_prop_ref),
+            "tx_penalty": -self.reward_tx_scale * self._normalize_linear(tx_delay, self.reward_tx_ref),
+            "hop_penalty": -self.reward_hop_penalty,
+            "delay_shaping": shaping_reward,
+            "loop_penalty": loop_penalty,
+            **shaping_info,
+        }
 
     def _calculate_reward_layer3(self, block, sat, prevSat, satDest):
         graph = self._get_runtime_graph(sat)
-        reward = self._calculate_reward_layer2(block, sat, prevSat, satDest)
+        reward, reward_info = self._calculate_reward_layer2(block, sat, prevSat, satDest)
         local_congestion_delay = self._estimate_local_congestion_delay(sat, block, graph)
         local_penalty = self.reward_local_congestion_scale * math.tanh(
             local_congestion_delay / max(self.reward_local_congestion_ref, 1e-6)
         )
-        return reward - local_penalty
+        reward -= local_penalty
+        reward_info.update(
+            {
+                "local_congestion_delay": local_congestion_delay,
+                "local_congestion_penalty": -local_penalty,
+            }
+        )
+        return reward, reward_info
 
     def _finalize_reward(self, reward, is_terminal=False, is_failure=False):
         if is_failure:
@@ -576,9 +624,9 @@ class BaseAgent(ABC):
                         self.reward_queue_ref,
                     )
 
-            reverse_graph = graph.reverse(copy=False)
+            dijkstra_graph = graph.reverse(copy=False) if hasattr(graph, 'reverse') else graph
 
-            def weight(rev_u, rev_v, data):
+            def weight(src_id, dst_id, data):
                 prop_delay = max(float(data.get('slant_range', 0.0)), 0.0) / system_configure.Vc
                 data_rate = data.get('dataRateOG', self.reward_min_rate)
                 if not np.isfinite(data_rate) or data_rate <= 0:
@@ -588,10 +636,10 @@ class BaseAgent(ABC):
                     self.reward_prop_scale * self._normalize_linear(prop_delay, self.reward_prop_ref)
                     + self.reward_tx_scale * self._normalize_linear(tx_delay, self.reward_tx_ref)
                     + self.reward_remaining_hop_cost
-                    + node_delay.get(rev_u, 0.0)
+                    + node_delay.get(dst_id, 0.0)
                 )
 
-            lengths = nx.single_source_dijkstra_path_length(reverse_graph, satDest.ID, weight=weight)
+            lengths = nx.single_source_dijkstra_path_length(dijkstra_graph, satDest.ID, weight=weight)
             self._delay_to_go_cache = {cache_key: lengths}
 
         return lengths.get(sat_from.ID)
@@ -602,12 +650,59 @@ class BaseAgent(ABC):
 
         if prev_delay is None or cur_delay is None:
             fallback_distance = getDistanceRewardV4(prevSat, sat, satDest, self.w2, self.w4)
-            return 0.5 * self.reward_distance_scale * math.tanh(
+            fallback_reward = 0.5 * self.reward_distance_scale * math.tanh(
                 fallback_distance / max(self.reward_distance_ref, 1e-6)
             )
+            return fallback_reward, {
+                "delay_to_go_prev": float("nan"),
+                "delay_to_go_cur": float("nan"),
+                "delay_to_go_improvement": float("nan"),
+                "delay_shaping_fallback": fallback_reward,
+            }
 
         improvement = prev_delay - cur_delay
-        return self.reward_delay_beta * math.tanh(improvement / max(self.reward_delay_ref, 1e-6))
+        shaping_reward = self.reward_delay_beta * math.tanh(improvement / max(self.reward_delay_ref, 1e-6))
+        return shaping_reward, {
+            "delay_to_go_prev": prev_delay,
+            "delay_to_go_cur": cur_delay,
+            "delay_to_go_improvement": improvement,
+            "delay_shaping_fallback": 0.0,
+        }
+
+    def _maybe_log_reward_breakdown(
+        self,
+        sat,
+        mode,
+        reward_info,
+        base_reward,
+        final_reward,
+        is_terminal=False,
+        is_failure=False,
+    ):
+        if not self.reward_log_enabled:
+            return
+        if self.step % self.reward_log_interval != 0:
+            return
+
+        payload = {
+            "reward/mode_id": {
+                "legacy": 0.0,
+                "layer1": 1.0,
+                "layer2": 2.0,
+                "layer3": 3.0,
+            }.get(mode, -1.0),
+            "reward/base": base_reward,
+            "reward/final": final_reward,
+            "reward/is_terminal": float(bool(is_terminal)),
+            "reward/is_failure": float(bool(is_failure)),
+        }
+        for key, value in reward_info.items():
+            if value is None:
+                continue
+            if isinstance(value, (int, float, np.floating)) and np.isfinite(value):
+                payload[f"reward/{key}"] = float(value)
+
+        self.log_infos(payload, self.step)
 
     def alignEpsilon(self, step, sat):
         maxEps = self.config.MAX_EPSILON
