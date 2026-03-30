@@ -285,6 +285,11 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         logger.info('%s', selectedGateWayLocations['Location'])
         logger.info('Movement Time: %s', movementTime)
 
+        configure_runtime_stats(
+            output_path=outputPath,
+            stream_to_disk=getattr(system_configure, 'streamBlockStatsToDisk', False),
+            flush_threshold=getattr(system_configure, 'blockStatsFlushThreshold', 5000),
+        )
 
         # earth1, _, _, _ = initialize(env, agent_class, populationDataDir, './Gateways.csv', radioKM, inputParams, movementTime, locations, outputPath, matching=matching)
         earth1, _, _, _ = initialize(env, agent_class, populationDataDir, allGateWayInfo, radioKM, movementTime, outputPath, matching=matching)
@@ -309,6 +314,7 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
                 traceback.print_exception(e)
             raise
         timeToSim = time.time() - startTime
+        finalize_runtime_stats()
 
         # save learnt values
         if earth1.agent is not None:
@@ -332,8 +338,11 @@ def RunSimulation(GTs, outputPath, agent_class, radioKM):
         
             plotSavePathLatencies(outputPath, GTnumber, pathBlocks)
 
-            logger.info('Plotting Throughput...')
-            plot_packet_latencies_and_uplink_downlink_throughput(blocks, outputPath, bins_num=30, save = True, plot_separately = plotAllThro)
+            if blocks:
+                logger.info('Plotting Throughput...')
+                plot_packet_latencies_and_uplink_downlink_throughput(blocks, outputPath, bins_num=30, save = True, plot_separately = plotAllThro)
+            else:
+                logger.info('No finished blocks available, skipping throughput plots.')
             # plot_throughput_cdf(blocks, outputPath, bins_num = 100, save = True, plot_separately = plotAllThro)
             
             logger.info('Plotting rewards...')

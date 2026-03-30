@@ -26,6 +26,7 @@ class Earth:
         # Input the population count data
         # img_path = 'Population Map/gpw_v4_population_count_rev11_2020_15_min.tif'
         self.outputPath = outputPath
+        self.img_path = img_path
         # self.plotPaths = plotPath
         self.lostBlocks = 0
         self.queues = []
@@ -42,22 +43,18 @@ class Earth:
         self.graph  = None
         # self.CKA    = []
 
-        pop_count_data = Image.open(img_path)
-
-        pop_count = np.array(pop_count_data)
-        pop_count[pop_count < 0] = 0  # ensure there are no negative values
-
-        # total image sizes
-        [self.total_x, self.total_y] = pop_count_data.size
+        with Image.open(img_path) as pop_count_data:
+            # total image sizes
+            [self.total_x, self.total_y] = pop_count_data.size
 
         self.total_cells = self.total_x * self.total_y
 
-        # List of all cells stored in a 2d array as per the order in dataset
+        # In fixed_pairs mode we do not need per-cell traffic generation, so delay
+        # materializing the full global cell grid unless some later workflow needs it.
         self.cells = []
-        for i in range(self.total_x):
-            self.cells.append([])
-            for j in range(self.total_y):
-                self.cells[i].append(Cell(self.total_x, self.total_y, i, j, pop_count[j][i]))
+        self._cells_loaded = False
+        if getattr(system_configure, 'trafficMode', 'all2all') != 'fixed_pairs':
+            self._ensure_cells_loaded()
 
         # window is a list with the coordinate bounds of our window of interest
         # format for window = [western longitude, eastern longitude, southern latitude, northern latitude]
@@ -103,6 +100,21 @@ class Earth:
 
         # Simpy process for handling moving the constellation and the satellites within the constellation
         # self.moveConstellation = env.process(self.moveConstellation(env, deltaT, getRates))
+
+    def _ensure_cells_loaded(self):
+        if self._cells_loaded:
+            return
+
+        with Image.open(self.img_path) as pop_count_data:
+            pop_count = np.array(pop_count_data)
+        pop_count[pop_count < 0] = 0
+
+        self.cells = []
+        for i in range(self.total_x):
+            self.cells.append([])
+            for j in range(self.total_y):
+                self.cells[i].append(Cell(self.total_x, self.total_y, i, j, pop_count[j][i]))
+        self._cells_loaded = True
     
     def _setupTrafficProcesses(self):
         """
@@ -197,6 +209,7 @@ class Earth:
         Finds the cells that are within the coverage areas of all GTs and links them ensuring that a cell only links to
         a single GT.
         """
+        self._ensure_cells_loaded()
         start = time.time()
 
         # Find cells that are within range of all GTs
@@ -264,6 +277,7 @@ class Earth:
         """
         Used for plotting the population map.
         """
+        self._ensure_cells_loaded()
         temp = []
         for i, cellList in enumerate(self.cells):
             temp.append([])

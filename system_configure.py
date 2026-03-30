@@ -129,6 +129,8 @@ plotAllThro = True      # If True, it plots throughput plots for each single pat
 winSize     = 20        # window size for the representation in the plots
 markerSize  = 50        # Size of the markers in the plots
 enableQueueHistogram = False  # Queue histogram logging switch (legacy): if True, collect earth.queues and plot Queues_*.csv/png at end
+streamBlockStatsToDisk = True  # Stream finished block statistics to CSV instead of retaining all DataBlock objects in memory
+blockStatsFlushThreshold = 1000  # Flush received block stats to disk every N finished blocks
 
 # =============================================================================
 # 5. State Representation

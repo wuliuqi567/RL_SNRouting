@@ -10,9 +10,83 @@ import pandas as pd
 from collections import defaultdict
 import seaborn as sns
 import torch
+from types import SimpleNamespace
 
 
 logger = logging.getLogger(__name__)
+
+
+LATENCY_COLUMNS = [
+    'Creation Time',
+    'Latency',
+    'Arrival Time',
+    'Source',
+    'Destination',
+    'Block ID',
+    'QueueTime',
+    'TxTime',
+    'PropTime',
+]
+
+
+def _load_received_block_stats(outputPath):
+    if hasattr(receivedDataBlocks, 'to_dataframe'):
+        return receivedDataBlocks.to_dataframe()
+
+    rows = []
+    for block in receivedDataBlocks:
+        total_time = float(block.getTotalTransmissionTime())
+        rows.append({
+            'Creation Time': float(block.creationTime),
+            'Latency': total_time,
+            'Arrival Time': float(block.creationTime + total_time),
+            'Source': block.source.name,
+            'Destination': block.destination.name,
+            'Block ID': block.ID,
+            'QueueTime': float(block.getQueueTime()[0]),
+            'TxTime': float(block.txLatency),
+            'PropTime': float(block.propLatency),
+        })
+    return pd.DataFrame(rows, columns=LATENCY_COLUMNS)
+
+
+def _coerce_block_stats_dataframe(data):
+    if isinstance(data, pd.DataFrame):
+        df = data.copy()
+    else:
+        rows = []
+        for block in data:
+            total_time = float(block.getTotalTransmissionTime())
+            rows.append({
+                'Creation Time': float(block.creationTime),
+                'Latency': total_time,
+                'Arrival Time': float(block.creationTime + total_time),
+                'Source': block.path[0][0],
+                'Destination': block.path[-1][0],
+                'Block ID': block.ID,
+                'QueueTime': float(block.getQueueTime()[0]),
+                'TxTime': float(block.txLatency),
+                'PropTime': float(block.propLatency),
+            })
+        df = pd.DataFrame(rows, columns=LATENCY_COLUMNS)
+
+    if df.empty:
+        return pd.DataFrame(columns=LATENCY_COLUMNS)
+
+    for column in ['Creation Time', 'Latency', 'Arrival Time', 'QueueTime', 'TxTime', 'PropTime']:
+        df[column] = pd.to_numeric(df[column], errors='coerce')
+    return df
+
+
+def _to_plot_blocks(df):
+    blocks = []
+    for row in df.to_dict('records'):
+        blocks.append(SimpleNamespace(
+            path=[(row['Source'],), (row['Destination'],)],
+            creationTime=float(row['Creation Time']),
+            totLatency=float(row['Latency']),
+        ))
+    return blocks
 
 def plotLatencies(percentages, pathing, savePath):
     '''
@@ -96,39 +170,21 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
     first       = earth.gateways[0]
     second      = earth.gateways[1]
 
-    # Reuse existing received block objects instead of building a duplicated wrapper list.
-    # This avoids an additional O(n) memory footprint inside this function.
-    blocks = receivedDataBlocks
+    blocks = _load_received_block_stats(outputPath)
+    blocks = _coerce_block_stats_dataframe(blocks)
 
-    # earth.pathParam
+    if not blocks.empty:
+        totalTime = float(blocks['Latency'].sum())
+        queue_sum = float(blocks['QueueTime'].sum())
+        tx_sum = float(blocks['TxTime'].sum())
+        prop_sum = float(blocks['PropTime'].sum())
+        block_count = int(len(blocks))
+        allLatencies = blocks[LATENCY_COLUMNS].values.tolist()
+        pair_df = blocks[
+            (blocks['Source'] == first.name) & (blocks['Destination'] == second.name)
+        ][['Latency', 'Arrival Time']].copy()
+        pathBlocks = [pair_df.values.tolist(), []]
 
-    for block in receivedDataBlocks:
-        time = block.getTotalTransmissionTime()
-        queue_time = block.getQueueTime()[0]
-
-        totalTime += time
-        queue_sum += queue_time
-        tx_sum += block.txLatency
-        prop_sum += block.propLatency
-        block_count += 1
-        
-        # [creation time, total latency, arrival time, source, destination, block ID, queue time, transmission latency, prop latency]
-        allLatencies.append([
-            block.creationTime,
-            block.totLatency,
-            block.creationTime + block.totLatency,
-            block.source.name,
-            block.destination.name,
-            block.ID,
-            queue_time,
-            block.txLatency,
-            block.propLatency,
-        ])
-        # pre-process the received data blocks. create the rows that will be saved in csv
-        if block.source == first and block.destination == second:
-            pathBlocks[0].append([block.totLatency, block.creationTime+block.totLatency])
-            pathBlocks[1].append(block)
-        
     # save congestion test data
     # blockPath = f"./Results/Congestion_Test/{pathing} {float(pd.read_csv('inputRL.csv')['Test length'][0])}/"
     # print('Saving congestion test data...\n')
@@ -195,7 +251,9 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
         pd.DataFrame(columns=block_info_columns).to_csv(block_info_file, index=False)
     block_info_row.to_csv(block_info_file, mode='a', index=False, header=False)
 
-    results = Results(finishedBlocks=blocks,
+    plot_blocks = _to_plot_blocks(blocks)
+
+    results = Results(finishedBlocks=plot_blocks,
                       constellation=constellationType,
                       GTs=GTs,
                       meanTotalLatency=avgTime,
@@ -206,16 +264,25 @@ def getBlockTransmissionStats(timeToSim, GTs, constellationType, earth, outputPa
                       perPropLatency = prop_pct,
                       perTransLatency = tx_pct)
 
-    return results, allLatencies, pathBlocks, blocks
+    return results, allLatencies, pathBlocks, plot_blocks
 
 
 def plotSavePathLatencies(outputPath, GTnumber, pathBlocks):
     # figure of latencies between two first gateways
-    latency = []
-    arrival = []
-    for item in pathBlocks[0]:
-        latency.append(item[0])
-        arrival.append(item[1])
+    if isinstance(pathBlocks, pd.DataFrame):
+        latency = pathBlocks['Latency'].tolist() if 'Latency' in pathBlocks else []
+        arrival = pathBlocks['Arrival Time'].tolist() if 'Arrival Time' in pathBlocks else []
+    else:
+        latency = []
+        arrival = []
+        for item in pathBlocks[0]:
+            latency.append(item[0])
+            arrival.append(item[1])
+
+    if not latency:
+        logger.info('No path latency samples available for the first GT pair, skipping path latency plots.')
+        return
+
     plt.scatter(arrival, latency, c='r')
     plt.xlabel("Time")
     plt.ylabel("Latency")               
