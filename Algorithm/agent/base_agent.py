@@ -306,9 +306,9 @@ class BaseAgent(ABC):
     def _resolve_model_dir(self):
         model_dir = self.model_dir_save
         if 'test_teacher_network' in model_dir:
-            model_dir = re.sub(r'test_teacher_network[^/\]*', 'train', model_dir)
+            model_dir = re.sub(r'test_teacher_network[^/\\]*', 'train', model_dir)
         elif 'test_student_network' in model_dir:
-            model_dir = re.sub(r'test_student_network[^/\]*', 'train', model_dir)
+            model_dir = re.sub(r'test_student_network[^/\\]*', 'train', model_dir)
 
         if not os.path.isabs(model_dir):
             model_dir = os.path.join(self.outputPath, '../train/', model_dir)
