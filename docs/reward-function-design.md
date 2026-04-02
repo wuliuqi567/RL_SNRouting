@@ -409,7 +409,7 @@ P_local_congestion =
 
 ### 8.3 本地拥塞前瞻如何计算
 
-当前实现中，对当前落点卫星 `s_cur` 的每个邻居，计算：
+当前实现中，对当前落点卫星 `s_cur` 的每个邻居，先计算：
 
 ```text
 candidate_delay =
@@ -417,13 +417,29 @@ candidate_delay =
   + prop_delay(s_cur -> n)
 ```
 
-然后对其中最优的前两个出口做均值：
+然后按 `candidate_delay` 排序，取其中最优的前两个出口，但真正用于 layer3 惩罚的是这两个出口的平均排队等待：
+
+```text
+local_congestion_queue_delay = mean(best_2_queue_waits)
+P_local_congestion =
+    reward_local_congestion_scale
+    * tanh(local_congestion_queue_delay / reward_local_congestion_ref)
+```
+
+同时仍会在日志里保留：
 
 ```text
 local_congestion_delay = mean(best_2_candidate_delays)
+local_congestion_prop_delay = mean(best_2_prop_delays)
 ```
 
-为什么取前两个而不是最小一个：
+为什么这样改：
+
+- 如果直接惩罚 `queue_wait + prop_delay`，会把正常几何传播时延也重复算进 layer3
+- 这会让 `layer3` 的 reward 基线天然低于 `layer2`，即便实际路由效果未必更差
+- 改成只惩罚“局部出口排队风险”，更符合“local congestion lookahead”的语义
+
+为什么仍取前两个而不是最小一个：
 
 - 只取最小值会过于乐观
 - 使用前两个平均值可以降低偶然单个“假优出口”的影响
@@ -452,6 +468,13 @@ local_congestion_delay = mean(best_2_candidate_delays)
 
 - `reward_local_congestion_scale`
 - `reward_remaining_queue_scale`
+- `reward_local_congestion_ref`
+
+额外说明：
+
+- 如果 `layer2` 能收敛且 KPI 更好，但 `layer3` 只是 reward 更低，不应只看 reward 曲线下结论
+- 因为 `layer3` 相比 `layer2` 多了一项常驻惩罚，数值基线天然不完全可比
+- 更应该同时看 `avgTime`、`Queue time`、送达率和平均 hop
 
 ---
 

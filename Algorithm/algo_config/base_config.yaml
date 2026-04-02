@@ -3,13 +3,13 @@ agent: 'MHGNN' # GAT, MHGNN, MPNN, DDQN, MHGNNKGE
 use_rl_model: true # false: shortest-path only (no RL model)
 
 # training parameters
-train_TA_model: false # whether to train the teacher agent network
+train_TA_model: true # whether to train the teacher agent network
 use_student_network: false # whether to use the student network for action selection
 
 seed: 42
 logger: 'wandb' # options: 'wandb', 'tensorboard', 'swanlab'
 project_name: "satNetEnv3"
-wandb_user_name: "wmqbit"
+wandb_user_name: "wmq"
 log_dir: 'logs'
 model_dir: 'models' # 前面不要加 / ./ 等
 
@@ -43,7 +43,8 @@ w2: 20        # rewards getting closes phisycally
 w4: 5         # Normalization for the distance reward, for the traveled distance factor
 
 # reward shaping modes: legacy | layer1 | layer2 | layer3
-reward_mode: 'layer1'
+reward_mode: 'layer3'
+reward_change_reward_layer3: true
 arrive_reward: 50.0
 failure_penalty: 50.0
 loop_penalty: 10.0
@@ -76,6 +77,6 @@ reward_log_interval: 100
 
 
 mode_load_dir: "SimResults_new/MHGNN/2026-03-29/18-00-33_Starlink_3s_GTs_[31]_fp3_t1.41G_MS2AD700M_LACU2P700M_ANZ2JMN10M/" # directory to load the model for evaluation or further training, should end with /
-outputPath: '/home/qwer/Desktop/RL_SNRouting/SimResults_new/MHGNN/2026-03-29/18-00-33_Starlink_3s_GTs_[31]_fp3_t1.41G_MS2AD700M_LACU2P700M_ANZ2JMN10M/test_teacher_network_Starlink_3s_GTs_[31]_fp3_t1.51G_MS2AD750M_LACU2P750M_ANZ2JMN10M/'
+outputPath: '/home/qwer/Desktop/RL_SNRouting/./SimResults_new/MHGNN/2026-04-02/21-21-14_Starlink_3s_GTs_[31]_fp3_t1.51G_MS2AD750M_LACU2P750M_ANZ2JMN10M/train/'
 power: 3 # epsilon 衰减中的幂指数因子，默认 2，根据网关数量适当调整
 CurrentGTnumber: 31

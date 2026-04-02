@@ -40,3 +40,4 @@ __pychache__
 __pycache__/
 *.py[cod]
 /intergrated_test/.mhgnn_parallel_runs/
+.codex

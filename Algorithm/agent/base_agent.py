@@ -438,14 +438,17 @@ class BaseAgent(ABC):
     def _calculate_reward_layer3(self, block, sat, prevSat, satDest):
         graph = self._get_runtime_graph(sat)
         reward, reward_info = self._calculate_reward_layer2(block, sat, prevSat, satDest)
-        local_congestion_delay = self._estimate_local_congestion_delay(sat, block, graph)
+        local_congestion_stats = self._estimate_local_congestion_delay(sat, block, graph)
+        local_congestion_delay = local_congestion_stats["queue_delay_mean_best2"]
         local_penalty = self.reward_local_congestion_scale * math.tanh(
             local_congestion_delay / max(self.reward_local_congestion_ref, 1e-6)
         )
         reward -= local_penalty
         reward_info.update(
             {
-                "local_congestion_delay": local_congestion_delay,
+                "local_congestion_delay": local_congestion_stats["total_delay_mean_best2"],
+                "local_congestion_queue_delay": local_congestion_stats["queue_delay_mean_best2"],
+                "local_congestion_prop_delay": local_congestion_stats["prop_delay_mean_best2"],
                 "local_congestion_penalty": -local_penalty,
             }
         )
@@ -585,13 +588,26 @@ class BaseAgent(ABC):
         for _, queue_len, slant_range, data_rate in self._iter_neighbor_metrics(sat, graph):
             queue_wait = queue_len * block.size / data_rate
             prop_delay = slant_range / system_configure.Vc
-            candidates.append(queue_wait + prop_delay)
+            candidates.append((queue_wait, prop_delay, queue_wait + prop_delay))
 
         if not candidates:
-            return self.reward_local_congestion_ref * 2.0
+            fallback = self.reward_local_congestion_ref * 2.0
+            return {
+                "queue_delay_mean_best2": fallback,
+                "prop_delay_mean_best2": 0.0,
+                "total_delay_mean_best2": fallback,
+            }
 
-        candidates.sort()
-        return float(np.mean(candidates[: min(2, len(candidates))]))
+        candidates.sort(key=lambda item: item[2])
+        top_candidates = candidates[: min(2, len(candidates))]
+        queue_delay = float(np.mean([item[0] for item in top_candidates]))
+        prop_delay = float(np.mean([item[1] for item in top_candidates]))
+        total_delay = float(np.mean([item[2] for item in top_candidates]))
+        return {
+            "queue_delay_mean_best2": queue_delay,
+            "prop_delay_mean_best2": prop_delay,
+            "total_delay_mean_best2": total_delay,
+        }
 
     def _get_delay_to_go_cache_key(self, graph, satDest, block_size, env_now):
         return (
