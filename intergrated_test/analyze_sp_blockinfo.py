@@ -104,7 +104,19 @@ def apply_plot_style() -> None:
     )
 
 
-def plot_latency_trends(data: dict, out_dir: Path) -> Path:
+def normalize_png_name(file_name: str | None, input_csv: Path) -> str:
+    if file_name is None:
+        name = input_csv.stem
+    else:
+        name = file_name.strip()
+    if not name:
+        raise ValueError("--output-name cannot be empty")
+    if not name.lower().endswith(".png"):
+        name = f"{name}.png"
+    return name
+
+
+def plot_latency_trends(data: dict, out_dir: Path, output_name: str) -> Path:
     flow = data["flow"]
     fig, axes = plt.subplots(2, 2, figsize=(11, 7.2), sharex=True)
 
@@ -127,7 +139,7 @@ def plot_latency_trends(data: dict, out_dir: Path) -> Path:
     fig.suptitle("Latency Components vs Offered Flow", y=0.98)
     fig.tight_layout()
 
-    out_path = out_dir / "fig_latency_subplots_vs_flow.png"
+    out_path = out_dir / output_name
     fig.savefig(out_path)
     plt.close(fig)
     return out_path
@@ -220,17 +232,23 @@ def main() -> None:
         default="intergrated_test/SP_analysis_figures",
         help="Output directory for generated figures",
     )
+    parser.add_argument(
+        "--output-name",
+        default=None,
+        help="Output image filename (.png). Default: same as input CSV filename",
+    )
     args = parser.parse_args()
 
     input_csv = Path(args.input_csv).resolve()
     output_dir = Path(args.output_dir).resolve()
+    output_name = normalize_png_name(args.output_name, input_csv)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rows = load_rows(input_csv)
     data = prepare_series(rows)
 
     apply_plot_style()
-    outputs = [plot_latency_trends(data, output_dir)]
+    outputs = [plot_latency_trends(data, output_dir, output_name)]
 
     print(f"Input CSV: {input_csv}")
     print(f"Output dir: {output_dir}")

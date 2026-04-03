@@ -446,7 +446,7 @@ if __name__ == '__main__':
     yaml_ruamel.indent(mapping=2, sequence=4, offset=2)
     
     config_file = "./Algorithm/algo_config/base_config.yaml"
-    outputBasePath = "./SimResults_new/"
+    outputBasePath = "./SimResults_new_returnGS/"
     # test_outputPath = "SimResults/DDQN/2025-12-24/15-15-52_Starlink_3s_GTs_[2]_1adj/"
 
     with open(config_file, "r") as f:

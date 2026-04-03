@@ -137,7 +137,7 @@ def main() -> None:
 	)
 	parser.add_argument(
 		"--base-dir",
-		default="SimResults_new/ShortestPath/2026-03-26",
+		default="SimResults_new_returnGS/ShortestPath/2026-03-26",
 		help="Date directory to scan, e.g. SimResults_new/ShortestPath/2026-03-26",
 	)
 	parser.add_argument(

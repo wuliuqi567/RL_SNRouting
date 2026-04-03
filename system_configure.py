@@ -86,10 +86,17 @@ extraTrafficExcludeReverse = True
 #       ("Los Angeles, California, US",    "Malaga, Spain",                500e6), # 500 Mbps LA → Malaga
 #   ]
 trafficPairs = [
-    ("Malaga, Spain",                  "Aalborg, Denmark",  750e6),   # 1 Gbps  Malaga → LA
-    ("Los Angeles, California, US",    "Panama",            750e6),   # 800 Mbps LA → Panama
+    ("Malaga, Spain",                  "Aalborg, Denmark",  800e6),   # 1 Gbps  Malaga → LA
+    ("Los Angeles, California, US",    "Panama",            800e6),   # 800 Mbps LA → Panama
     ("Awarua, New Zealand",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
 ]
+# trafficPairs = [
+#     ("Malaga, Spain",                  "Aalborg, Denmark",  500e6),   # 1 Gbps  Malaga → LA
+#     ("Aalborg, Denmark",                  "Malaga, Spain",  500e6),   # 1 Gbps  Malaga → LA
+
+#     # ("Los Angeles, California, US",    "Panama",            500e6),   # 800 Mbps LA → Panama
+#     ("Awarua, New Zealand",                  "Jan Mayen, Norway", 10e6)     # 10 Mbps Nemea → Jan Mayen 可扩展
+# ]
 
 if extraTrafficEnabled:
     trafficPairs = build_traffic_pairs(

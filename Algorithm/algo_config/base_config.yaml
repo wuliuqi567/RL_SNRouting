@@ -43,7 +43,7 @@ w2: 20        # rewards getting closes phisycally
 w4: 5         # Normalization for the distance reward, for the traveled distance factor
 
 # reward shaping modes: legacy | layer1 | layer2 | layer3
-reward_mode: 'layer3'
+reward_mode: 'layer2'
 reward_change_reward_layer3: true
 arrive_reward: 50.0
 failure_penalty: 50.0
@@ -76,7 +76,7 @@ reward_log_enabled: false
 reward_log_interval: 100
 
 
-mode_load_dir: "SimResults_new/MHGNN/2026-03-29/18-00-33_Starlink_3s_GTs_[31]_fp3_t1.41G_MS2AD700M_LACU2P700M_ANZ2JMN10M/" # directory to load the model for evaluation or further training, should end with /
-outputPath: '/home/qwer/Desktop/RL_SNRouting/./SimResults_new/MHGNN/2026-04-02/21-21-14_Starlink_3s_GTs_[31]_fp3_t1.51G_MS2AD750M_LACU2P750M_ANZ2JMN10M/train/'
+mode_load_dir: "SimResults_new/MHGNN/2026-03-30/14-11-14_Starlink_3s_GTs_[31]_fp3_t1.61G_MS2AD800M_LACU2P800M_ANZ2JMN10M/" # directory to load the model for evaluation or further training, should end with /
+outputPath: '/home/qwer/Desktop/RL_SNRouting/intergrated_test/.mhgnn_parallel_runs/flow_0950M/SimResults_new/MHGNN/2026-03-30/14-11-14_Starlink_3s_GTs_[31]_fp3_t1.61G_MS2AD800M_LACU2P800M_ANZ2JMN10M/test_teacher_network_Starlink_3s_GTs_[31]_fp3_t1.91G_MS2AD950M_LACU2P950M_ANZ2JMN10M/'
 power: 3 # epsilon 衰减中的幂指数因子，默认 2，根据网关数量适当调整
 CurrentGTnumber: 31
